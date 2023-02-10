@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SeaBird CTD Report</title>
+
+	<style>
+		@page {
+			size: 210mm 297mm;
+		}
+
+		.color1 {
+			color: #1E4174
+		}
+
+		.bg1 {
+			background-color: #1E4174;
+		}
+
+		.color2 {
+			color: #DDA94B
+		}
+
+		.bg2 {
+			background-color: #DDA94B;
+		}
+
+		.font1-fantasy {
+			color: #1E4174;
+			font-family: fantasy;
+		}
+
+		.font-text {
+			font-family: Arial, Helvetica, sans-serif;
+		}
+
+
+		.parent4 {
+			display: grid;
+			grid-template-columns: repeat(4, 1fr);
+		}
+
+		.parent2 {
+			display: grid;
+			grid-template-columns: repeat(2, 1fr);
+		}
+
+		.parent12 {
+			display: grid;
+			grid-template-columns: 1fr 2fr;
+		}
+
+		.section-result {
+			display: none;
+		}
+
+		#page-front {
+			font-family: sans-serif;
+		}
+
+		/* .color1 {
+			color: #04336b;
+		} */
+
+		.page-summary-13 {
+			height: 310px;
+			padding: 25px;
+			display: grid;
+			grid-template-columns: 100mm auto;
+		}
+
+		.page-summary-img {
+			width: 300px;
+			height: 300px;
+			border: 1px solid black;
+		}
+
+		.page-summary-title {
+			color: #DDA94B;
+			font-family: fantasy;
+			font-size: 5rem;
+		}
+
+		.page-summary-subtitle {
+			color: #1E4174;
+			font-family: fantasy;
+			font-size: 2rem;
+		}
+
+		.page-summary-text {
+			font-size: 1.5rem;
+			font-family: Arial, Helvetica, sans-serif;
+		}
+
+		.text-right {
+			text-align: right;
+		}
+
+		.hid {
+			display: none;
+		}
+
+		.border-black {
+			border: 1px solid black;
+		}
+
+		.font-size-smaller {
+			font-size: 0.8em;
+		}
+
+		.no-deco {
+			text-decoration: none;
+			color: black;
+		}
+	</style>
+</head>
+
+<body>
+	<section id="page-file" class="hidd">
+		<input id="file" type="file" multiple="true" style="width: 95vw; height: 20vh; border: 1px solid red;"
+			onchange="onChangeFile()">
+	</section>
+
+	<section id="page-invalid">
+		<ul id="areaInvalid"></ul>
+	</section>
+
+	<section id="page-front" class="section-result">
+		<!-- Header -->
+		<div style="background-color: #04336b; padding: 20px; text-align: center; font-family: fantasy;">
+			<span style="font-size: 2rem; color: white; height: 100%;">R/V ISABU</span>
+		</div>
+
+		<div style="margin-top: 120px;"></div>
+
+		<!-- Title -->
+		<div style="padding-left: 150px;" class="font1-fantasy">
+			<span style="font-size: 7rem">CTD</span>
+			<br>
+			<span style="font-size: 5rem">Report</span>
+			<br>
+			<span style="font-size: 2rem" id="dateReport">2022-02-02</span>
+		</div>
+
+		<div style="margin-top: 430px;"></div>
+
+		<!-- RV Image -->
+		<div style="text-align: center;">
+			<img src="./isabu.jpg" style="height: 250px; opacity: 0.4; filter: grayscale(1)">
+		</div>
+
+		<!-- Generated mark -->
+		<div style="margin-top: 350px; text-align: center; font-size: 0.5rem;">
+			<p>CTD Report generated at <span id="txtNow">2022-02-02T05:05:55.333Z</span> powered by
+				<a href="https://github.com/heosd/marineviewer">Marine viewer</a>
+			</p>
+		</div>
+	</section>
+
+	<div style="page-break-before: always"></div>
+
+	<section id="page-summary" class="section-result">
+		<!-- Navigation -->
+		<div class="page-summary-13">
+			<svg id="canvasSVG" width="300" height="300" class="page-summary-img">
+			</svg>
+			<div>
+				<span class="page-summary-title">01</span>
+				<br>
+				<span class="page-summary-subtitle">Navigation</span>
+				<br>
+				<div class="page-summary-text parent12">
+					<span id="txtCruiseTime"></span>
+					<span id="txtCruiseDuration" class="text-right font-size-smaller"
+						title="from hex header NMEA UTC, to hex raw nmea date or length count"></span>
+
+					<span id="txtDistance1"></span>
+					<a id="txtPosition1" class="text-right font-size-smaller no-deco" title="NMEA Latitude Longitude"
+						target="_blank"></a>
+
+					<span id="txtDistance2"></span>
+					<a id="txtPosition2" class="text-right font-size-smaller no-deco" title="NMEA Latitude Longitude"
+						target="_blank"></a>
+
+					<span class="hid page-summary-text">Navigation only : <span id="txtNavigationMin"></span></span>
+				</div>
+
+			</div>
+		</div>
+		<hr>
+
+		<!-- CTD Cast as number -->
+		<div class="page-summary-13">
+			<span id="txtCTDCasting1" class="page-summary-img font1-fantasy"
+				style="font-size: 12rem; text-align: center;">
+				1
+			</span>
+			<div>
+				<span class="page-summary-title">02</span>
+				<br>
+				<span class="page-summary-subtitle">CTD</span>
+				<br>
+				<span class="page-summary-text"><span id="txtCTDCasting2"></span> times CTD cast</span>
+				<br>
+				<span class="page-summary-text"><span id="txtCTDCastingMin"></span></span>
+			</div>
+		</div>
+		<hr>
+
+		<!-- CTD Temp, Depth plot -->
+		<div class="page-summary-13">
+			<canvas id="canvasTimeSeries" width="300" height="300" class="page-summary-img"></canvas>
+			<div>
+				<span class="page-summary-title">03</span>
+				<br>
+				<span class="page-summary-subtitle">TEMP, DEPTH</span>
+				<br>
+				<canvas id="canvasTimeSeriesLegend" width="100" height="50" style="vertical-align: top;"></canvas>
+				<br>
+				<div class="page-summary-text">
+					Temp : <span id="txtCTDMinTemp"></span> ~ <span id="txtCTDMaxTemp"></span>
+					<br>
+					Depth : <span id="txtCTDMinDepth"></span> ~ <span id="txtCTDMaxDepth"></span>
+				</div>
+			</div>
+		</div>
+		<hr>
+
+		<!-- Config -->
+		<div class="page-summary-13">
+			<span class="page-summary-img font1-fantasy" style="font-size: 12rem; text-align: center;">
+				1
+			</span>
+			<div>
+				<span class="page-summary-title">03</span>
+				<br>
+				<span class="page-summary-subtitle">Config</span>
+				<br>
+				<span class="page-summary-text" id="txtConfig">NMEA GPS, NMEA Time</span>
+			</div>
+		</div>
+	</section>
+
+	<div style="break-after:page"></div>
+
+	<!-- List -->
+	<section class="section-result">
+		<div style="padding: 25px;">
+			<h1>List of all files</h1>
+			<ctd-group-list id="ctdGroupList"></ctd-group-list>
+		</div>
+	</section>
+
+	<div style="break-after:page"></div>
+
+	<!-- Details -->
+	<section id="areaDetails" class="section-result">
+		<!-- <ctd-group-detail id="resultDetail"></ctd-group-detail> -->
+	</section>
+
+
+	<script src="../../common/Basics.js"></script>
+	<script src="../../common/GeoSpatial.js"></script>
+	<script src="../../common/Canvas2DPixel.js"></script>
+	<script src="../../common/SVGE.js"></script>
+
+	<script src="../../libs/marineparser/MarineParser.min.js"></script>
+	<script src="./CTDElements.js"></script>
+
+	<script>
+
+		function requestP() {
+			setTimeout(async () => {
+				const r = await fetch('./P.json');
+				const json = await r.json();
+
+				// json only has summary
+				json.forEach(d => {
+					if (d.dateHex) {
+						if ('string' === typeof d.dateHex[0]) {
+							d.dateHex[0] = new Date(d.dateHex[0]);
+						}
+
+						if ('string' === typeof d.dateHex[1]) {
+							d.dateHex[1] = new Date(d.dateHex[1]);
+						}
+					}
+
+					if (d.hdr) {
+						if ('string' === typeof d.hdr.utc) {
+							d.hdr.utc = new Date(d.hdr.utc);
+						}
+					}
+				});
+				const groups = json.map(d => {
+					return {
+						summary: d
+					}
+				});
+
+				// console.log(groups);
+				refreshReport(groups);
+
+				// drawSamples2(json);
+				// drawSamplesCanvas(json);
+				// drawSamplesCanvasLegend();
+			}, 1);
+		}
+
+		// requestP();
+
+		// TODO Clean this code
+		const colorblue = ["#1e4174", "#334d6f", "#48586b", "#5e6466", "#736f62", "#887b5d", "#9d8659", "#b39254", "#c89d50", "#dda94b"];
+
+
+		function drawSamplesCanvas(json) {
+			const canvas = document.getElementById('canvasTimeSeries');
+			const ctx = canvas.getContext('2d');
+
+			const w = canvas.width;
+			const h = canvas.height;
+
+			const scaleY = scaleLinear([0, 500], [0, h]);
+			const scaleX = scaleLinear([0, json.length], [0, w]);
+			const scaleColor = createColorSceheme([0, 35], colorblue);
+			const width = ~~(scaleX(1) + 1); // floor can make blank so plus 1
+			const height = 10; // just fixed pixel not to make blank
+
+			for (let i = 0; i < json.length; i++) {
+				const summary = json[i];
+				const sample = summary.samples;
+				const name = summary.name;
+
+				const x = scaleX(i);
+				for (let j = 0; j < sample.length; j++) {
+					const item = sample[j];
+					const depth = item[3];
+					if (depth > 500) { // only goes 500m depth
+						break;
+					}
+
+					const temp = item[1];
+					const y = ~~scaleY(depth);
+					const color = scaleColor(temp);
+
+					// ctx.beginPath();
+					ctx.fillStyle = color;
+					ctx.fillRect(x, y, width, height);
+				}
+
+				// -- file name, less than 5 items only
+				if (5 > json.length) {
+					ctx.font = "15px Arial";
+					ctx.fillStyle = 'white';
+					ctx.fillText(name, x + 2, 40);
+				}
+			}
+
+			// -- 0m ~ 500m
+			ctx.font = "15px Arial";
+			ctx.fillStyle = 'white';
+
+			ctx.fillText('0m', w - 25, 20);
+			if (500 > json.at(-1).samples.at(-1)[3]) {
+				ctx.fillStyle = 'black';
+			}
+			ctx.fillText('500m', w - 45, h - 15);
+
+			// -- frame
+			// ctx.beginPath();
+			// ctx.strokeStyle = 'black';
+			// ctx.rect(0, 0, w, h);
+			// ctx.stroke();
+		}
+
+
+		function drawSamplesCanvasLegend() {
+			const canvas = document.getElementById('canvasTimeSeriesLegend');
+			const ctx = canvas.getContext('2d');
+
+			const w = canvas.width;
+			const h = canvas.height;
+			const scaleColor = createColorSceheme([0, w], colorblue);
+			const height = 10;
+
+			for (let i = 0; i < w; i++) {
+				const color = scaleColor(i);
+				ctx.fillStyle = color;
+				ctx.fillRect(i, 0, 1, height);
+			}
+
+			ctx.font = "15px Arial";
+			ctx.fillStyle = 'black';
+			ctx.fillText('0', 2, 30);
+			ctx.fillText('35', 80, 30);
+		}
+	</script>
+
+	<script>
+
+		function onChangeFileDone() {
+			if (window.timerChangeFile) {
+				clearTimeout(window.timerChangeFile);
+			}
+
+			window.timerChangeFile = setTimeout(() => {
+				postProcess();
+			}, 100);
+		}
+
+		function init() {
+			const fileList = new MarineParser.ParserCTD.CTDFileList();
+			window.fileList = fileList;
+
+			// window.canvasPosition = new Canvas2DPixel('canvasPosition');
+
+			window.d2p = new Degree2Pixel();
+		}
+
+		function onChangeFile() {
+			const e = document.getElementById('file');
+
+			Array.from(e.files).forEach(file => {
+				fileList.addFile(file);
+			});
+
+			onChangeFileDone();
+
+
+			document.getElementById('page-file').style.display = 'none';
+			// e.style.display = 'none';
+		}
+
+		function invalidFile(name, ext) {
+			const p = document.getElementById('areaInvalid');
+
+			const li = document.createElement('li');
+			li.textContent = `'${name}' has no '${ext}'`;
+			p.appendChild(li);
+		}
+
+		async function postProcess() {
+			const groups = fileList.getGroups();
+			const len = groups.length;
+			for (let i = 0; i < len; i++) {
+				const group = groups[i];
+
+				if (!group.files.xmlcon) {
+					invalidFile(group.name, 'xmlcon');
+				}
+
+				if (!group.files.hex) {
+					invalidFile(group.name, 'hex');
+				}
+
+				console.time('parse');
+				await group.parse();
+				summaryCTDGroups(group);
+				console.timeEnd('parse');
+				group.getHex().unload();
+			}
+
+			refreshReport(groups);
+		}
+
+		function refreshReport(groups) {
+			// -- all parsed
+			groups.every(group => {
+				const s = group.summary;
+				if ('object' !== typeof s.hdr.utc) {
+					console.error(`${group.name} has no header utc`);
+					return false;
+				}
+
+				if ('object' !== typeof s.dateHex[0] || 'object' !== typeof s.dateHex[1]) {
+					console.error(`${group.name} has no hex nmea date`);
+					return false;
+				}
+				// -- this is kind of warning
+			});
+
+			groups.sort((a, b) => a.summary.hdr.utc.getTime() - b.summary.hdr.utc.getTime());
+			console.log(groups);
+			summaryCTDReport(groups);
+
+			// drawPositions(groups);
+			drawPositionsSVG(groups);
+
+			refreshDetails(groups);
+
+			drawSamplesCanvas(groups.map(d => d.summary));
+			drawSamplesCanvasLegend();
+
+			const down = groups.map(d => d.summary);
+			// downloadObjectAsJson(down, 'dd.json');
+
+			// -- when
+			document.getElementById('txtNow').textContent = new Date().toISOString();
+
+			// -- show result sections
+			Array.from(document.getElementsByClassName('section-result')).forEach(e => e.style.display = 'block');
+			// -- hide invalid page
+			document.getElementById('page-invalid').style.display = 'none';
+		}
+
+		function downloadObjectAsJson(exportObj, exportName) {
+			var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
+			var downloadAnchorNode = document.createElement('a');
+			downloadAnchorNode.setAttribute("href", dataStr);
+			downloadAnchorNode.setAttribute("download", exportName + ".json");
+			document.body.appendChild(downloadAnchorNode); // required for firefox
+			downloadAnchorNode.click();
+			downloadAnchorNode.remove();
+		}
+
+		function summaryCTDReport(groups) {
+			const s0 = groups.at(0).summary;
+			const s1 = groups.at(-1).summary;
+
+			// -- 2022-02-02
+			document.getElementById('dateReport').textContent = new Date().toLocaleDateString('af');
+
+			// -- casting count
+			document.getElementById('txtCTDCasting1').textContent = groups.length;
+			document.getElementById('txtCTDCasting2').textContent = groups.length;
+
+			// -- time
+			if (s0.hdr.utc && s1.dateHex[0] && s1.dateHex[1]) {
+				const date = [s0.hdr.utc, s1.dateHex[1]];
+				const duration = `${date[0].toLocaleString('af', { timeZone: 'UTC' })} ~ ${date[1].toLocaleString('af', { timeZone: 'UTC' })}`;
+				document.getElementById('txtCruiseDuration').textContent = duration;
+
+				// -- overall cruise time
+				const msCruise = date[1].getTime() - date[0].getTime();
+				if (msCruise > (1000 * 60 * 60 * 24)) {
+					// over a day, string like 17d 13h 22m
+					document.getElementById('txtCruiseTime').textContent = msToReadable(msCruise, false);
+				} else {
+					// less than a day, string like 13 hours 22 minutes
+					document.getElementById('txtCruiseTime').textContent = msToReadable(msCruise, true);
+				}
+
+				// -- casting time
+				const msCasting = groups.map(group => group.summary.dateHex[1].getTime() - group.summary.dateHex[0].getTime()).reduce((a, b) => a + b, 0);
+				document.getElementById('txtCTDCastingMin').textContent = msToReadable(msCasting, true);
+				document.getElementById('txtNavigationMin').textContent = msToReadable(msCruise - msCasting);
+			}
+
+			// -- hex.hdr
+			const hdrs = groups.map(group => group.summary.hdr);
+			const hdr0 = hdrs.at(0), hdr1 = hdrs.at(-1);
+
+			if (hdr0.nmeaLat) {
+				const position1 = `${hdr0.nmeaLat}, ${hdr0.nmeaLng} ~ ${hdr1.nmeaLat}, ${hdr1.nmeaLng}`;
+				const position2 = `${hdr0.lat.toFixed(4)}, ${hdr0.lng.toFixed(4)} ~ ${hdr1.lat.toFixed(4)}, ${hdr1.lng.toFixed(4)}`;
+				document.getElementById('txtPosition1').textContent = position1;
+				document.getElementById('txtPosition1').setAttribute('href', 'hehe');
+
+				const p1 = document.getElementById('txtPosition1');
+				const p2 = document.getElementById('txtPosition2');
+				p1.textContent = position1;
+				p2.textContent = position2;
+				// https://www.google.com/maps/search/?api=1&query=47.5951518%2C-122.3316393
+				const lat = hdr0.lat.toFixed(4), lng = hdr0.lng.toFixed(4);
+				// -- can not set zoom level with marker
+				const urlMap = `https://www.google.com/maps/search/?api=1&query=${lat}%2C${lng}&z=13`;
+				p1.setAttribute('href', urlMap);
+				p2.setAttribute('href', urlMap);
+
+				// -- km
+				let totalDistance = 0;
+				for (let i = 1; i < hdrs.length; i++) {
+					const prev = hdrs[i - 1];
+					const item = hdrs[i];
+
+					const dist = GeoSpatial.distance(prev.lng, prev.lat, item.lng, item.lat);
+					totalDistance = totalDistance + dist;
+				}
+
+				const unitNM = 0.539956803;
+				const totalDistanceNM = totalDistance * unitNM;
+
+				const strDistance1 = `${totalDistanceNM.toFixed(2)} NM`;
+				const strDistance2 = `(${totalDistance.toFixed(2)} km)`;
+				const titleDistance1 = `${totalDistanceNM.toFixed(4)} Nautical miles`;
+				const titleDistance2 = `${totalDistance.toFixed(4)} Kilo meters`;
+
+				document.getElementById('txtDistance1').textContent = strDistance1;
+				document.getElementById('txtDistance1').title = titleDistance1;
+				document.getElementById('txtDistance2').textContent = strDistance2;
+				document.getElementById('txtDistance2').title = titleDistance2;
+			}
+
+			// -- Depth Temp
+			const dpt = ssExtent(groups, (d) => d.summary.d[1]);
+			const temp = ssExtent(groups, (d) => d.summary.t[1]);
+			document.getElementById('txtCTDMinDepth').textContent = dpt[0].toFixed(1);
+			document.getElementById('txtCTDMaxDepth').textContent = dpt[1].toFixed(1);
+			document.getElementById('txtCTDMinTemp').textContent = temp[0].toFixed(4);
+			document.getElementById('txtCTDMaxTemp').textContent = temp[1].toFixed(4);
+
+			// -- config
+			const desc0 = s0.descHex;
+			const config = {
+				countFreq: [desc0.countFreq],
+				countAD: [desc0.countAD],
+				nmeaDepth: [desc0.nmeaDepth],
+				nmeaPosition: [desc0.nmeaPosition],
+				nmeaTime: [desc0.nmeaTime],
+				scanTime: [desc0.scanTime],
+				surfacePar: [desc0.surfacePar],
+				scanAvg: [desc0.scanAvg]
+			}; // do not loop over, just write all the values, you need to reference keys
+
+			// -- push to config array if last values is different
+			const fnDiffPush = (cfg, desc, name) => {
+				if (cfg[name].at(-1) !== desc[name]) {
+					cfg[name].push(desc[name]);
+					return true;
+				}
+
+				return false;
+			}
+
+			// -- execute fnDiffPush to all groups hex description
+			const cfgKeys = Object.keys(config);
+			groups.forEach(group => cfgKeys.forEach(k => fnDiffPush(config, group.summary.descHex, k)));
+
+			console.log(config);
+			// max count of all values, if its 1 its ideal, all configs are same
+			// if its bigger than 2 thats not good
+			const maxLen = Math.max(...Object.values(config).map(d => d.length));
+
+			const mapFormatConfig = {
+				countAD: (v) => `Voltage : ${(v * 12) / 8} bytes`,
+				countFreq: (v) => `Frequency : ${v * 3} bytes`,
+			};
+
+			const strResult = [];
+			for (const [k, v] of Object.entries(config)) {
+				const format = mapFormatConfig[k];
+				if (format) {
+					strResult.push(format(v));
+				} else {
+					strResult.push(`${k} : ${v}`);
+				}
+			}
+
+			console.log(strResult);
+			document.getElementById('txtConfig').textContent = strResult.join(', ');
+
+
+			// -- order of files
+			groups.forEach(group => {
+				document.getElementById('ctdGroupList').addGroup(group);
+			});
+		}
+
+		function drawPositionsSVG(groups) {
+			const positions = groups.map(group => {
+				// -- can use getHdr instead of getHex but just in case where no HDR
+				const hdr = group.summary.hdr;
+				return [hdr.lat, hdr.lng];
+			});
+
+			const w = 300, h = 300;
+
+			const d2p = new Degree2Pixel();
+			d2p.setMapSize([w, h]);
+
+			d2p.zoomAdjust(positions);
+			d2p.zoomOut();
+
+			const b = d2p.getBounds();
+
+			const ns = "http://www.w3.org/2000/svg";
+			const svg = document.getElementById('canvasSVG')
+
+			const pixels = positions.map(d => d2p.getPixel(d));
+
+			const navPath = svgp();
+			pixels.forEach((p, i) => {
+				const circle = document.createElementNS(ns, 'circle');
+				circle.setAttributeNS(null, 'cx', p[0]);
+				circle.setAttributeNS(null, 'cy', p[1]);
+				circle.setAttributeNS(null, 'fill', '#04336b');
+				circle.setAttributeNS(null, 'r', 5);
+
+				const text = document.createElementNS(ns, 'text');
+				text.setAttributeNS(null, 'x', p[0] + 10);
+				text.setAttributeNS(null, 'y', p[1]);
+				text.textContent = groups[i].name;
+
+				navPath.add(p[0], p[1]);
+
+				svg.appendChild(circle);
+
+				// -- draw text with less than 10 items only
+				if (5 > groups.length) {
+					// text.setAttributeNS('null', 'transform', 'rotate(90)');
+					// text.setAttributeNS('null', 'text-anchor', 'start');
+					svg.appendChild(text);
+				}
+			});
+
+			svg.appendChild(navPath.create());
+
+			// -- frame
+			// const frame = document.createElementNS(ns, 'rect');
+			// frame.setAttributeNS(null, 'x', 0);
+			// frame.setAttributeNS(null, 'y', 0);
+			// frame.setAttributeNS(null, 'width', w);
+			// frame.setAttributeNS(null, 'height', h);
+			// frame.setAttributeNS(null, 'stroke', 'black');
+			// frame.setAttributeNS(null, 'fill', 'none');
+			// svg.appendChild(frame);
+		}
+
+		function refreshDetails(groups) {
+			const parents = document.getElementById('areaDetails');
+			groups.forEach(g => {
+				const e = new CTDGroupDetail(g);
+				parents.appendChild(e);
+
+				const pageBreak = document.createElement('div');
+				pageBreak.style.pageBreakBefore = 'always';
+				parents.appendChild(pageBreak);
+			});
+
+			// -- remove last page breaker
+			parents.childNodes[parents.childNodes.length - 1].remove();
+		}
+
+		function summaryCTDGroups(group) {
+			group.summary = {};
+
+			parseCTDReportGroup(group);
+			parseCTDReportHex(group);
+			parseCTDReportXMLCON(group);
+			parseCTDReportBL(group);
+		}
+
+		function findDownCast(depthDiff) {
+			// -- just difference points
+			const diffPoint = [];
+			let lastMeanSign = 0;
+			for (let i = 0; i < depthDiff.length; i++) {
+				const item = depthDiff[i];
+
+				const sign = item.mean > 0 ? 1 : (item.mean < 0 ? -1 : 0);
+				if (lastMeanSign !== sign) {
+					diffPoint.push(item);
+				}
+
+				lastMeanSign = sign;
+			}
+
+			// -- when theres no downcast
+			if (0 === diffPoint.length) {
+				// -- just start to end
+				return [depthDiff[0].idx, depthDiff.at(-1).idx];
+			}
+
+			// -- points to group start Index ~ end Index
+			const diffGroup = [];
+			for (let i = 1; i < diffPoint.length; i++) {
+				const prev = diffPoint[i - 1];
+				const item = diffPoint[i];
+
+				const mm = { mean: prev.mean, s: prev.idx, e: item.idx };
+				diffGroup.push(mm);
+			}
+
+			// -- find the biggest signed duration, max(e - s)
+			const maxDiffGroup = diffGroup.reduce((a, b) => {
+				if (0 >= b.mean) {
+					return a;
+				}
+
+				const ad = a.e - a.s;
+				const bd = b.e - b.s;
+				if (bd >= ad) {
+					return b;
+				}
+				return a;
+			}, diffGroup[0]);
+
+			// maxDiffGroup.e is the deepest, but maxDiffGroup.s is usually 50m
+
+			// -- reverse from maxGroup until mean is NEGATIVE
+			const idx = diffGroup.filter(d => d.s < maxDiffGroup.s).findLastIndex(d => d.mean < 0);
+			// -- idx is NEGATIVE, next group is usually mean 0, around 4m ~ 6m
+			const minDiffGroup = diffGroup[idx + 1];
+
+			// console.log(diffPoint);
+			// console.log(diffGroup);
+			// console.log(minDiffGroup, maxDiffGroup);
+
+			// use minDiffGroup.s ~ maxDiffGroup.e
+			return [minDiffGroup.s, maxDiffGroup.e];
+		}
+
+		function parseCTDReportGroup(group) {
+			// file name to summary
+
+			let fileName = undefined, fileExt = [];
+			const files = Object.values(group.files).filter(d => d).map(d => {
+				return {
+					name: d.name,
+					lastModified: d.lastModified,
+					size: d.size
+				};
+			});
+
+			group.summary.files = files;
+		}
+
+		function parseCTDReportHex(group) {
+			const hex = group.getHex();
+			const len = hex.getLength();
+
+			let step = 20;
+
+			if (len > 10000) {
+				step = 100;
+			}
+
+			const obj = {
+				// only for primary frequency and first altimeter
+				a: [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER], // altimeter
+				t: [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER], // temperature
+				s: [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER], // salinity
+				d: [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER], // depth
+			};
+
+			const result = [];
+			const depthDiff = []; // first is zero
+			let lastDepth = 0;
+			const three = [];
+			const round = (f) => MarineParser.ParserCTD.SeaConvert.Round(f, 5);
+			const toMin = (idx, c) => {
+				const v = c.value;
+				const line = [idx, round(v.f0), round(v.f1psu), round(v.f2depth), round(v.altimeter)];
+				return line;
+			}
+
+			for (let i = 100; i < len; i = i + step) {
+				const c = hex.parseValue(i); // this is full parse, can be optimized
+				const v = c.value;
+				const line = toMin(i, c);
+				result.push(line);
+
+				let diff = Math.round(v.f2depth - lastDepth);
+				lastDepth = v.f2depth;
+				three.push(diff);
+
+				if (3 < three.length) {
+					three.shift();
+				}
+
+				const mean = Math.round(three.reduce((a, b) => a + b, 0) / three.length);
+				depthDiff.push({ diff: diff, idx: i, mean: mean });
+
+				// // -- save idx for later use
+				// c.idx = i;
+
+				// result.push(c);
+
+				// -- TODO change this values with in downcast
+				minMax(obj, 'a', c.value.altimeter);
+				minMax(obj, 't', c.value.f0);
+				minMax(obj, 's', c.value.f1psu);
+				minMax(obj, 'd', c.value.f2depth);
+			}
+
+			const downcast = findDownCast(depthDiff);
+			const cs = toMin(downcast[0], hex.parseValue(downcast[0]));
+			const ce = toMin(downcast[1], hex.parseValue(downcast[1]));
+			// -- 1800 samples for 37MB hex
+			const samples = result.filter(item => item[0] >= downcast[0] && item[0] < downcast[1]);
+
+			for (const [k, v] of Object.entries(obj)) {
+				group.summary[k] = v;
+			}
+
+			// -- date
+			let nmeaDuration = [hex.parseValue(100).date, hex.parseValue(len - 100).date];
+			if (undefined === nmeaDuration[0] || undefined === nmeaDuration[1]) {
+				console.log('No nmea Date, date from hdr and divide by 24hz as 1sec');
+				nmeaDuration[0] = hex.getParsedHDR().utc;
+				// 24 lines of hex as 1 sec
+				const ms = nmeaDuration[0].getTime() + ((hex.getLength() / 24) * 1000);
+				nmeaDuration[1] = new Date(Math.round(ms));
+			}
+			group.summary.dateHex = nmeaDuration;
+			group.summary.lengthHex = hex.getLength();
+
+
+
+			// -- saves samples
+			group.summary.samples = samples;
+
+			// -- saves name again
+			group.summary.name = group.name;
+
+			// -- hdr from hex
+			group.summary.hdr = hex.getParsedHDR();
+
+			// -- parsingDesc
+			group.summary.descHex = hex.parsingDesc;
+		}
+
+		function prettyPrintSensor(item) {
+			if (item) {
+				const type = item.type.slice(0, 3);
+				return `${type}_${item.serial}`;
+			}
+
+			return undefined;
+		}
+
+		function parseCTDReportXMLCON(group) {
+			const xml = group.getXmlcon();
+
+			if (!group.summary) {
+				group.summary = {};
+			}
+
+			group.summary.sensors = xml.parsedMap;
+		}
+
+		function parseCTDReportBL(group) {
+			const bl = group.getBl();
+			if (bl) {
+				group.summary.bl = bl.getParsedBL();
+			}
+		}
+
+		// obj should initialized
+		function minMax(obj, name, value) {
+			obj[name][0] > value && (obj[name][0] = value);
+			obj[name][1] < value && (obj[name][1] = value);
+		}
+
+		function msToReadable(ms, fullFormat) {
+			const min = ~~(ms / 1000 / 60);
+
+			const d = Math.floor(min / (24 * 60));
+			const h = Math.floor((min % (24 * 60)) / 60);
+			const m = min % 60;
+
+			const r = [];
+
+			if (fullFormat) {
+
+				const rtf1 = new Intl.RelativeTimeFormat('en');
+
+				if (0 < d) {
+					const f = rtf1.formatToParts(d, 'day');
+					r.push(f[1].value + f[2].value);
+				}
+
+				if (0 < h) {
+					const f = rtf1.formatToParts(h, 'hour');
+					r.push(f[1].value + f[2].value);
+				}
+
+				if (0 < m) {
+					const f = rtf1.formatToParts(m, 'minute');
+					r.push(f[1].value + f[2].value);
+				}
+
+				return r.join(' ');
+			} else {
+				if (0 < d) {
+					r.push(`${d}d`);
+				}
+
+				if (0 < h) {
+					r.push(`${h}h`);
+				}
+
+				if (0 < m) {
+					r.push(`${m}m`);
+				}
+
+				return r.join(' ');
+			}
+		}
+
+		init();
+	</script>
+</body>
+
+</html>

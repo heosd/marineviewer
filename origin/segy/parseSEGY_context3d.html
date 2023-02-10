@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Parse SEGY</title>
+	<style>
+		section {
+			display: flex;
+			flex-direction: column;
+		}
+
+		.main {
+			display: flex;
+			flex-direction: row;
+			flex: 4;
+		}
+
+		header {
+			flex: 1;
+			display: flex;
+		}
+
+		header>div {
+			height: 140px;
+			flex: 1;
+		}
+
+		.value-present {
+			display: inline-block;
+			width: 50px;
+			margin-left: 10px;
+		}
+	</style>
+</head>
+
+<body>
+	<section>
+		<header>
+			<!-- left -->
+			<div>
+				<h1>Work in progress</h1>
+				<p>Endian : <span id="txtEndian">Unknown</span> endian, Sample Code : <span id="txtSampleCode">Not
+						found</span></p>
+				<p>X : <span id="txtXCount"></span>, Y : <span id="txtYCount"></span></p>
+			</div>
+			<!-- right -->
+			<div>
+				<form>
+					<!-- 37MB -->
+					<input id="inputURL" type="text" style="width: 80%;" placeholder="url"
+						value="http://127.0.0.1:8080/raw/raw.sgy">
+					<button onclick="onClickSubmitURL();return false;">Submit</button>
+				</form>
+				<input type="file" style="width: 95%;" onchange="onChangeFile(this)">
+				<textarea is="text-log" id="textLog" style="width: 80%; height: 80px"></textarea>
+			</div>
+		</header>
+
+		<div class="main">
+			<canvas id="renderCanvas" width="500" height="500"></canvas>
+			<canvas id="canvas" width="800" height="500"></canvas>
+			<div id="areaRanges">
+			</div>
+		</div>
+	</section>
+
+	<script src="../../common/TextLog.js"></script>
+	<script src="../../common/Basics.js"></script>
+	<script src="../../common/LoadFile.js"></script>
+	<script src="../../common/Canvas2DPixel.js"></script>
+
+	<!-- <script src="../../libs/earcut/earcut.min.js"></script> -->
+	<script src="../../libs/babylonjs/babylon.js"></script>
+	<script src="../../libs/marineparser/MarineParser.min.js"></script>
+
+	<script>
+		const canvas = document.getElementById("renderCanvas"); // Get the canvas element
+		const engine = new BABYLON.Engine(canvas, true); // Generate the BABYLON 3D engine
+		const createScene = function () {
+			const scene = new BABYLON.Scene(engine);
+
+			var camera = new BABYLON.FlyCamera("FlyCamera", new BABYLON.Vector3(900, 1120, 215), scene);
+			camera.rollCorrect = 10;
+			camera.bankedTurn = true;
+			camera.bankedTurnLimit = Math.PI / 2;
+			camera.bankedTurnMultiplier = 1;
+			camera.attachControl(canvas, true);
+
+			camera.rotation = new BABYLON.Vector3(1.02, -1.56, 0);
+			camera.speed = 20;
+			camera.attachControl(canvas, true);
+			const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+			light.intensity = 1;
+
+			const axes = new BABYLON.AxesViewer(scene, 500);
+			// const ground = BABYLON.MeshBuilder.CreateGround("ground",
+			// 	{ width: 100, height: 100 }, scene);
+			return scene;
+		};
+
+		const scene = createScene();
+		engine.runRenderLoop(function () {
+			scene.render();
+		});
+	</script>
+
+	<script>
+		async function onClickSubmitURL() {
+			const e = document.getElementById('inputURL');
+			const url = e.value;
+			if (!url.match(/^http/i)) {
+				alert('invalid url, only accept starting with http');
+				return;
+			}
+
+			TextLog.Time('trying to fetch');
+			const ab = await fetchFileFromURL(url, TextLog.Append);
+			TextLog.Time('fetch done');
+			// TextLog.Append(`fetch done ${(d2.getTime() - d1.getTime())}ms`);
+
+			const context = parseSEGY(ab);
+			postProcess(context);
+		}
+
+		async function onChangeFile(e) {
+			const file = e.files[0];
+
+			const d1 = new Date();
+			TextLog.Append(`trying to read local file ${file.name}, ${file.size} bytes`);
+			const ab = await file.arrayBuffer();
+			const d2 = new Date();
+			TextLog.Append(`read done ${(d2.getTime() - d1.getTime())}ms`);
+
+			const context = parseSEGY(ab);
+
+			const d3 = new Date();
+			TextLog.Append(`parse sections done ${(d3.getTime() - d2.getTime())}ms`);
+
+			postProcess(context);
+		}
+
+		function postProcess(context) {
+			const maxX = context.traces.length;
+			const maxY = context.traces[0].length
+
+			document.getElementById('txtXCount').textContent = maxX;
+			document.getElementById('txtYCount').textContent = maxY;
+
+			// TextLog.Append(`parse sections done ${(d3.getTime() - d2.getTime())}ms`);
+
+			const parent = document.getElementById('areaRanges');
+			parent.innerHTML = '';
+			createRanges(parent);
+			setRanges('startX', 0, maxX, 0);
+			setRanges('sizeX', 200, maxX, maxX);
+			setRanges('startY', 0, maxY, 0);
+			setRanges('sizeY', 200, maxY, maxY);
+
+			create3DObject();
+			onChangeRange();
+		}
+
+
+
+		function create3DObject() {
+			var groundWidth = 800;
+			var groundHeight = 500;
+
+			var ground = BABYLON.MeshBuilder.CreateGround("ground1", { width: groundWidth, height: groundHeight, subdivisions: 25 }, scene);
+
+			//Create dynamic texture
+			var textureResolution = 512;
+			var textureGround = new BABYLON.DynamicTexture("dynamic texture", textureResolution, scene);
+			var textureContext = textureGround.getContext();
+
+			var materialGround = new BABYLON.StandardMaterial("Mat", scene);
+			materialGround.diffuseTexture = textureGround;
+			// ground.material = materialGround;
+
+			window.tc = textureContext;
+			window.tg = textureGround;
+
+			var customMesh = new BABYLON.Mesh("custom", scene);
+			customMesh.material = materialGround;
+
+			var positions = [-700, 200, 0, -700, -200, 0, 100, -400, 600, 100, -200, 600];
+			var indices = [0, 1, 2, 3];
+			var uvs = [0, 1, 0, 0, 1, 0];
+
+			var normals = [];
+			BABYLON.VertexData.ComputeNormals(positions, indices, normals);
+
+			var vertexData = new BABYLON.VertexData();
+
+			vertexData.positions = positions;
+			vertexData.indices = indices;
+			vertexData.normals = normals;
+			vertexData.uvs = uvs;
+
+			vertexData.applyToMesh(customMesh);
+		}
+
+		function parseSEGY(ab) {
+			const segy = MarineParser.ParserSEGY.ParserTest.LoadArrayBuffer(ab);
+			const context = new MarineParser.ParserSEGY.ParserContext();
+			context.load(ab);
+
+			window.dataSourceContext = context;
+
+			document.getElementById('txtEndian').textContent = true === context.isLE ? 'Little' : 'Big';
+			document.getElementById('txtSampleCode').textContent = context.sampleCodeFound?.[1];
+
+			const traces = context.parseTraces();
+			TextLog.Time('parse Traces done');
+			console.log(context);
+
+			return context;
+		}
+
+		function createRanges(parent) {
+			const ids = ['startX', 'sizeX', 'startY', 'sizeY', 'startV', 'sizeV'];
+			const list = ids.map((id, i) => {
+				const span = document.createElement('span');
+				span.classList.add('value-present');
+				const e = document.createElement('input');
+				e.type = 'range';
+				e.id = id;
+				e.addEventListener('change', onChangeRange);
+				e.addEventListener('input', () => {
+					span.textContent = e.value;
+				});
+
+				const label = document.createElement('label');
+				label.htmlFor = id;
+				label.textContent = id;
+
+				parent.appendChild(e);
+				parent.appendChild(label);
+				parent.appendChild(span);
+
+				if (1 === i % 2) {
+					parent.appendChild(document.createElement('br'));
+				}
+
+				return e;
+			});
+
+			// -- setting defaults
+			setRanges('startV', 0, 1000, 0);
+			setRanges('sizeV', 0, 800, 1);
+		}
+
+		function setRanges(id, min, max, value) {
+			const e = document.getElementById(id);
+
+			if (!e) {
+				console.error(`Invalid id ${id}`);
+				return;
+			}
+
+			if (0 < min) {
+				e.min = min;
+			}
+
+			if (0 < max) {
+				e.max = max;
+			}
+
+			if (!isNaN(value)) {
+				e.value = value;
+			}
+
+			e.dispatchEvent(new CustomEvent('input'));
+		}
+
+		function onChangeRange() {
+			const startX = parseInt(document.getElementById('startX').value);
+			const sizeX = parseInt(document.getElementById('sizeX').value);
+			const startY = parseInt(document.getElementById('startY').value);
+			const sizeY = parseInt(document.getElementById('sizeY').value);
+			const startV = parseInt(document.getElementById('startV').value);
+			const sizeV = parseInt(document.getElementById('sizeV').value);
+
+			const context = window.dataSourceContext;
+			if (context && context.traces) {
+				TextLog.TimeNew();
+				drawTraces(context.traces, [startV, startV + sizeV], [startX, startX + sizeX], [startY, startY + sizeY]);
+				TextLog.Time('drawing 2d done');
+			}
+		}
+
+		function drawTraces(traces, domainValue, domainX, domainY, fit) {
+			const canvas = new Canvas2DPixel('canvas');
+			const s = {
+				domainValue: [0, 800],
+				domainX: [0, traces.length],
+				domainY: [0, traces[0].length],
+				rangeValue: [255, 0],
+				rangeX: [0, canvas.w],
+				rangeY: [0, canvas.h],
+			}
+
+			if (false === fit) {
+				// TODO implement false fit
+			} else {
+				// -- default, undefined 'fit' is TRUE!
+				if (domainValue && 2 === domainValue.length) {
+					!isNaN(domainValue[0]) && (s.domainValue[0] = domainValue[0]);
+					!isNaN(domainValue[1]) && (s.domainValue[1] = domainValue[1]);
+				}
+
+				if (domainX && 2 === domainX.length) {
+					!isNaN(domainX[0]) && (s.domainX[0] = domainX[0]);
+					!isNaN(domainX[1]) && (s.domainX[1] = domainX[1]);
+				}
+
+				if (domainY && 2 === domainY.length) {
+					!isNaN(domainY[0]) && (s.domainY[0] = domainY[0]);
+					!isNaN(domainY[1]) && (s.domainY[1] = domainY[1]);
+				}
+			}
+
+			const scaleX = scaleLinear(s.domainX, s.rangeX);
+			const scaleY = scaleLinear(s.domainY, s.rangeY);
+			const colorGray = scaleLinearLimit(s.domainValue, s.rangeValue);
+
+			canvas.newImage();
+			canvas.fill(0xFFAAAAAA);
+			traces.forEach((trace, ix) => {
+				const posX = ~~scaleX(ix);
+				trace.forEach((v, iy) => {
+					const posY = ~~scaleY(iy);
+					const gray = Math.floor(colorGray(v));
+					const color = 0xFF000000 | gray | gray << 8 | gray << 16;
+					// const color = gray << 24;
+
+					canvas.draw32triple(posX, posY, color);
+				});
+			});
+
+			canvas.putImage();
+
+			canvas.bufferSaveImage();
+			window.tc.putImageData(canvas.bufferSaved, 0, 0);
+			window.tg.update();
+		}
+
+		// setTimeout(onClickSubmitURL, 1);
+	</script>
+</body>
+
+</html>

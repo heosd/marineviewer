@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Color</title>
+
+	<style>
+		.grid2 {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+		}
+
+		.container {
+			display: grid;
+			grid-template-columns: 320px 300px;
+			grid-row-gap: 10px;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="grid2">
+		<div class="area-left">
+			<button onclick="onClickRandom()">Randomize</button>
+			<input type="number" value="9" onchange="window.numbers = this.value;refreshGG()">
+			<br>
+
+			<div class="container">
+				<canvas id="cp1" is="color-picker" width="300" height="300"></canvas>
+				<canvas id="cp2" is="color-picker" width="300" height="300"></canvas>
+				<input id="c1" type="text" style="width: 292px;" onchange="onChangeC()" value="#171a90">
+				<input id="c2" type="text" style="width: 292px;" onchange="onChangeC()" value="#bbae01">
+			</div>
+			<br>
+			<canvas id="gg" is="gradient-generator" width="600" height="300"></canvas>
+			<br>
+			<textarea id="result1" style="width: 600px; height: 100px"></textarea>
+			<br>
+			<textarea id="result2" style="width: 600px; height: 100px"></textarea>
+		</div>
+
+		<div class="area-right">
+			<div id="area-palettes"></div>
+		</div>
+	</div>
+
+
+	<script src="./ColorElements.js"></script>
+	<script src="../../common/ColorPalettes.js"></script>
+
+	<script>
+		window.colors = [];
+		window.numbers = 9;
+		const gg = document.getElementById('gg');
+		onChangeC();
+		createPalettes();
+
+		document.getElementById('cp1').addEventListener('color', (c) => {
+			document.getElementById('c1').value = c.detail.hex;
+			onChangeC();
+		});
+
+		document.getElementById('cp2').addEventListener('color', (c) => {
+			document.getElementById('c2').value = c.detail.hex;
+			onChangeC();
+		});
+
+		function refreshGG() {
+			// console.log(window.colors);
+			gg.setColors(window.colors);
+			const r = gg.drawGradient(window.numbers);
+			const hex = r.map(d => `"${d.hex}"`).join(', ');
+			const rgb = r.map(d => `"${d.rgbs}"`).join(', ');
+
+			document.getElementById('result1').value = `const colors = [${hex}];`;
+			document.getElementById('result2').value = `const colors = [${rgb}];`;
+		}
+
+		function onClickRandom() {
+			const count = ~~(Math.random() * 3) + 2;
+			const c = [];
+			for (let i = 0; i < count; i++) {
+				const rgb = randomRGB();
+				c.push(rgb);
+			}
+
+			window.colors = c;
+			refreshGG();
+		}
+
+		function onChangeC() {
+			const c1 = document.getElementById('c1');
+			const c2 = document.getElementById('c2');
+
+			window.colors = [ppColorString(c1.value), ppColorString(c2.value)];
+
+			refreshGG();
+		}
+
+		function randomRGB() {
+			const r = ~~(Math.random() * 256);
+			const g = ~~(Math.random() * 256);
+			const b = ~~(Math.random() * 256);
+
+			const sr = ColorPicker.toHex(r);
+			const sg = ColorPicker.toHex(g);
+			const sb = ColorPicker.toHex(b);
+
+			const rgb = `RGB(${r}, ${g}, ${b})`;
+
+			return rgb;
+		}
+
+		/*
+		eeeeee -> 6 char -> #eeeeee
+		12, 0, 2 -> rgb(12, 0, 2)
+		*/
+		function ppColorString(str) {
+			const mrgb = str.match(/(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*/);
+			const srgb = str.match(/(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})/);
+			if (6 === str.length && -1 === str.indexOf(' ')) {
+				return '#' + str;
+			} else if (mrgb) {
+				const r = parseInt(mrgb[1]);
+				const g = parseInt(mrgb[2]);
+				const b = parseInt(mrgb[3]);
+				return `rgb(${r}, ${g}, ${b})`;
+			} else if (srgb) {
+				const r = parseInt(srgb[1]);
+				const g = parseInt(srgb[2]);
+				const b = parseInt(srgb[3]);
+				return `rgb(${r}, ${g}, ${b})`;
+			}
+
+			return str;
+		}
+
+		function createPalettes() {
+			const p = document.getElementById('area-palettes');
+			if (!colorPalettes) {
+				return;
+			}
+
+			for (const [k, v] of Object.entries(colorPalettes)) {
+				const canvas = new GradientGenerator();
+				canvas.width = 300;
+				canvas.height = 50;
+				p.appendChild(canvas);
+
+				let sorted = v;
+				if (-1 === k.indexOf('random')) {
+					sroted = v.sort((a, b) => {
+						const argb = ColorPicker.HEX2RGB(a);
+						const brgb = ColorPicker.HEX2RGB(b);
+						const ahsl = ColorPicker.RGB2HSL(argb.r, argb.g, argb.b);
+						const bhsl = ColorPicker.RGB2HSL(brgb.r, brgb.g, brgb.b);
+
+						const diff = ahsl.l - bhsl.l;
+						return diff;
+					});
+				}
+
+				canvas.setColors(sorted);
+				canvas.addEventListener('click', () => {
+					window.colors = sorted;
+					refreshGG();
+				});
+				const r = canvas.drawGradient(v.length);
+
+				const span = document.createElement('span');
+				span.textContent = k;
+				const br = document.createElement('br');
+				p.appendChild(span);
+				p.appendChild(br);
+			}
+		}
+	</script>
+</body>
+
+
+
+</html>

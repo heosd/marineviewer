@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Parse Kongsberg Multibeam 'ALL' context data</title>
+	<style>
+		section {
+			display: flex;
+			flex-direction: column;
+		}
+
+		header {
+			flex: 1;
+			display: flex;
+		}
+
+		header>div {
+			height: 120px;
+			flex: 1;
+		}
+	</style>
+</head>
+
+<body>
+	<section>
+		<header>
+			<!-- left -->
+			<div>
+			</div>
+			<!-- right -->
+			<div>
+				<form>
+					<input id="inputURL" type="text" style="width: 80%;" placeholder="url"
+						value="http://127.0.0.1:8080/raw/raw.all">
+					<button onclick="onClickSubmitURL();return false;">Submit</button>
+				</form>
+				<input type="file" style="width: 95%;" onchange="onChangeFile(this)">
+				<textarea is="text-log" id="textLog" style="width: 80%; height: 80px"></textarea>
+			</div>
+		</header>
+
+		<div>
+			<select id="selectColor1"></select>
+		</div>
+		<div>
+			<canvas id="renderCanvas" width="500" height="500"></canvas>
+			<canvas id="canvas" width="500" height="500"></canvas>
+			<canvas id="canvasSeq" width="500" height="500"></canvas>
+			<textarea id="textArea" style="width: 500px; height: 500px;"></textarea>
+			<div
+				style="display: inline-block; width: 500px; height: 500px; vertical-align: bottom; font-family: monospace;">
+				<p style="font-size: xx-large"></p>
+			</div>
+		</div>
+	</section>
+
+
+	<script src="../../common/TextLog.js"></script>
+	<script src="../../common/Basics.js"></script>
+	<script src="../../common/LoadFile.js"></script>
+	<script src="../../common/GeoSpatial.js"></script>
+	<script src="../../libs/babylonjs/babylon.js"></script>
+
+	<script src="../../common/Canvas2DPixel.js"></script>
+	<script src="../../common/ColorPalettes.js"></script>
+
+	<!-- Required files are included at worker, just render here -->
+	<script src="../../libs/marineparser/MarineParser.min.js"></script>
+
+	<script>
+		const canvas = document.getElementById("renderCanvas"); // Get the canvas element
+		const engine = new BABYLON.Engine(canvas, true); // Generate the BABYLON 3D engine
+		const createScene = function () {
+			const scene = new BABYLON.Scene(engine);
+
+			var camera = new BABYLON.FlyCamera("FlyCamera", new BABYLON.Vector3(900, 1120, 215), scene);
+			camera.rollCorrect = 10;
+			camera.bankedTurn = true;
+			camera.bankedTurnLimit = Math.PI / 2;
+			camera.bankedTurnMultiplier = 1;
+			camera.attachControl(canvas, true);
+
+			camera.rotation = new BABYLON.Vector3(1.02, -1.56, 0);
+			camera.speed = 20;
+			camera.attachControl(canvas, true);
+			const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+			light.intensity = 1;
+
+			const axes = new BABYLON.AxesViewer(scene, 500);
+			// const ground = BABYLON.MeshBuilder.CreateGround("ground",
+			// 	{ width: 100, height: 100 }, scene);
+			return scene;
+		};
+
+		const scene = createScene();
+		engine.runRenderLoop(function () {
+			scene.render();
+		});
+
+		// Watch for browser/canvas resize events
+		// window.addEventListener("resize", function () {
+		// 	engine.resize();
+		// });
+	</script>
+
+	<script>
+		function initColors() {
+			const s1 = document.getElementById('selectColor1');
+			Object.keys(colorPalettes).forEach(k => {
+				const opt = document.createElement('option');
+				opt.textContent = k;
+				opt.value = k;
+				s1.appendChild(opt);
+			});
+
+			s1.addEventListener('change', (e) => {
+				const selected = e.target.value;
+				window.scaleColor = createColorSchemeFrom();
+
+				refreshResultViews();
+			});
+
+			s1.value = 'bigBath'; // default
+			s1.dispatchEvent(new Event('change'));
+
+		}
+		initColors();
+
+		function getSelectedColors() {
+			const s1 = document.getElementById('selectColor1');
+
+			const list = colorPalettes[s1.value];
+
+			return list;
+		}
+
+		function refreshResultViews() {
+			if (window.dataSourceContext) {
+				const context = window.dataSourceContext;
+				draw2D(context);
+				draw3D(context);
+				draw2dSeq(context);
+				const json = geoJSON(context);
+				document.getElementById('textArea').value = JSON.stringify(json);
+			}
+		}
+
+		function geoJSON(context, x) {
+			const listResult = [];
+
+			let lines = context.lines;
+
+			if (undefined !== x) {
+				lines = [context.lines[x]];
+			}
+
+			lines.forEach(line => {
+				const lineJSON = {
+					type: "LineString",
+					coordinates: [
+					]
+				};
+
+				const coordinates = line.map(d => [Number(d[1].toFixed(5)), Number(d[0].toFixed(5))]);
+				lineJSON.coordinates = coordinates;
+				listResult.push(lineJSON);
+			});
+
+			const result = {
+				type: "FeatureCollection",
+				features: [
+					{
+						type: "Feature",
+						properties: {},
+						geometry: {
+							type: "GeometryCollection",
+							geometries: []
+						}
+					}
+				]
+			};
+
+			result.features[0].geometry.geometries = listResult;
+
+			return result;
+		}
+
+		function createColorSchemeFrom() {
+			if (!window.dataSourceContext) {
+				return;
+			}
+
+			const context = window.dataSourceContext;
+
+			const s1 = document.getElementById('selectColor1').value;
+
+			if (!s1) {
+				return;
+			}
+
+			const list = colorPalettes[s1].map(s => ARGBtoABGR(parseInt('FF' + s.slice(1), 16)));
+			const scaleColor = createColorSceheme(context.stat.validRange, list);
+			return scaleColor;
+		}
+
+		function draw2D(context) {
+			console.time('2d');
+			const d2p = context.stat.d2p;
+
+			const info = d2p.getInfo();
+			const bounds = d2p.getBounds();
+			console.log(info);
+			console.log(bounds);
+
+			const canvas = new Canvas2DPixel('canvas');
+			canvas.newImage();
+
+			// canvas.fill(0xFFEEEEEE);
+
+			context.lines.forEach(line => {
+				line.forEach(dot => {
+					const pixel = d2p.getPixel([dot[0], dot[1]]);
+					canvas.draw32triple(pixel[0], pixel[1], scaleColor(dot[2]));
+				});
+			});
+
+			canvas.putImage();
+
+			canvas.bufferSaveImage();
+
+			console.timeEnd('2d');
+
+			// -- mouse event
+			window.fnSelect2d = (x) => {
+				const line = context.lines[x];
+
+				canvas.bufferRestoreImage();
+				canvas.initImageData();
+
+				line.forEach(dot => {
+					const pixel = d2p.getPixel([dot[0], dot[1]]);
+					canvas.draw32triple(pixel[0], pixel[1], 0xFF0000FF);
+				});
+
+				canvas.putImage();
+			}
+		}
+
+		function draw3D(context) {
+			console.time('3d');
+			// -- remove all meshes
+			const meshes = scene.getNodes().filter(d => 0 === d.id.indexOf('line'))
+			meshes.forEach(m => m.dispose());
+
+			const d2p = context.stat.d2p;
+
+			listColors = getSelectedColors().map(d => {
+				const m = d.match(/#(.{2})(.{2})(.{2})/);
+				const r = parseInt(m[1], 16) / 255;
+				const g = parseInt(m[2], 16) / 255;
+				const b = parseInt(m[3], 16) / 255;
+				// const r = ((d & 0x00FF0000) >> 16) / 255;
+				// const g = ((d & 0x0000FF00) >> 8) / 255;
+				// const b = (d & 0x000000FF) / 255;
+
+				return new BABYLON.Color4(r, g, b, 1);
+			});
+
+			const scaleZ = scaleLinear(context.stat.validRange, [100, -100]);
+			const colorZ = scaleLinearLimit(context.stat.validRange, [0, listColors.length - 1]);
+
+			context.lines.forEach((line, x) => {
+				const vectors = [];
+				const colors = [];
+				line.forEach(dot => {
+					const pixel = d2p.getPixel([dot[0], dot[1]]);
+					const z = scaleZ(dot[2]);
+					// -- xyz
+					const vec3 = new BABYLON.Vector3(pixel[1], z, pixel[0]);
+					vectors.push(vec3);
+
+					const color = Math.floor(colorZ(dot[2]));
+					colors.push(listColors[color]);
+				});
+
+				const lines = BABYLON.MeshBuilder.CreateLines(`lines${x}`, { points: vectors, colors: colors });
+			});
+
+			const bounds = d2p.getBounds();
+
+			// -- left top
+			draw3DText(`${bounds.left.toFixed(5)}, ${bounds.top.toFixed(5)}`, -40, -140);
+			draw3DText(`${bounds.right.toFixed(5)}, ${bounds.bottom.toFixed(5)}`, 500, 500);
+
+			console.timeEnd('3d');
+
+			// -- mouse event
+			let lastSelectedLine = undefined;
+			window.fnSelect3d = (x) => {
+				// -- remove last drawn
+				if (lastSelectedLine) {
+					lastSelectedLine.dispose();
+				}
+
+				const line = context.lines[x];
+				const vectors = [];
+				const colors = [];
+				line.forEach(dot => {
+					const pixel = d2p.getPixel([dot[0], dot[1]]);
+					const z = scaleZ(dot[2]);
+					// -- xyz
+					const vec3 = new BABYLON.Vector3(pixel[1], z, pixel[0]);
+					vectors.push(vec3);
+				});
+
+				const lines = BABYLON.MeshBuilder.CreateLines("linesSelected", { points: vectors });
+				lines.color = new BABYLON.Color3(1, 0, 0);
+				lastSelectedLine = lines;
+			}
+		}
+
+		function draw3DText(text, x, z) {
+			//Set font
+			var font_size = 48;
+			var font = "bold " + font_size + "px Arial";
+
+			//Set height for plane
+			var planeHeight = 40;
+
+			//Set height for dynamic texture
+			var DTHeight = 1.5 * font_size; //or set as wished
+
+			//Calcultae ratio
+			var ratio = planeHeight / DTHeight;
+
+			//Set text
+			// var text = "Some words";
+
+			//Use a temporay dynamic texture to calculate the length of the text on the dynamic texture canvas
+			var temp = new BABYLON.DynamicTexture("DynamicTexture", 64, scene);
+			var tmpctx = temp.getContext();
+			tmpctx.font = font;
+			var DTWidth = tmpctx.measureText(text).width + 8;
+
+			//Calculate width the plane has to be 
+			var planeWidth = DTWidth * ratio;
+
+			//Create dynamic texture and write the text
+			var dynamicTexture = new BABYLON.DynamicTexture("DynamicTexture", { width: DTWidth, height: DTHeight }, scene, false);
+			var mat = new BABYLON.StandardMaterial("mat", scene);
+			mat.diffuseTexture = dynamicTexture;
+			dynamicTexture.drawText(text, null, null, font, "#ffffff", "#000000", true);
+
+			//Create plane and set dynamic texture as material
+			var plane = BABYLON.MeshBuilder.CreatePlane("lineText", { width: planeWidth, height: planeHeight }, scene);
+			plane.material = mat;
+			plane.rotation = new BABYLON.Vector3(Math.PI / 2, - (Math.PI / 2), 0);
+			plane.position = new BABYLON.Vector3(x, 0, z);
+		}
+
+		function basicStat(context) {
+			const z = [];
+			const lines = context.lines;
+			lines.forEach(line => line.forEach(d => z.push(d[2])));
+
+			const filtered = filterOutliers(z);
+			const mean = z.reduce((prev, curr) => prev + curr, 0) / z.length;
+			const std = Math.sqrt(z.reduce((prev, curr) => prev + Math.pow((curr - mean), 2), 0) / z.length);
+
+			// -- d2p
+			const l0 = context.lines[0];
+			const l9 = context.lines.at(-1);
+
+			const d2p = new Degree2Pixel();
+			d2p.zoomAdjust([
+				[l0[0][0], l0[0][1]],
+				[l0.at(-1)[0], l0.at(-1)[1]],
+				[l9[0][0], l9[0][1]],
+				[l9.at(-1)[0], l9.at(-1)[1]]
+			]);
+
+			return {
+				validRange: filtered.validRange,
+				extent: filtered.extent,
+				mean: mean,
+				std: std,
+				d2p: d2p
+			}
+		}
+
+		function draw2dSeq(context) {
+			console.time('seq');
+
+			const stat = context.stat;
+
+			const eCanvas = document.getElementById('canvasSeq');
+			const w = eCanvas.width;
+			const h = eCanvas.height;
+			const margin = 50;
+
+			const scaleY = scaleLinear(stat.extent, [0, h - margin]);
+			const scaleX = scaleLinear([0, context.lines.length - 1], [margin, w]);
+
+			const seqX = {};
+
+			const canvas = new Canvas2DPixel('canvasSeq');
+			canvas.newImage();
+			context.lines.forEach((line, x) => {
+				const posX = ~~scaleX(x);
+				seqX[posX] = x;
+				line.forEach(dot => {
+					const posY = ~~scaleY(dot[2]);
+
+					canvas.draw32triple(posX, posY, scaleColor(dot[2]));
+				});
+			});
+
+			// -- global, event called other side
+			window.seqX = seqX;
+
+			canvas.putImage();
+
+			const ctx = canvas.ctx;
+
+			// -- frame
+			canvas.line(margin, 0, margin, h, '#000000', 1);
+			canvas.line(0, h - margin, w, h - margin, '#000000', 1);
+
+			// -- mean line
+			const yMean = ~~scaleY(stat.mean);
+			canvas.line(margin, yMean, w, yMean, '#333333', 1);
+
+			// -- mean Text
+			ctx.textBaseline = 'top';
+			ctx.textAlign = 'right';
+			ctx.font = '15px monospace';
+			ctx.fillText(Math.round(stat.mean) + 'm', margin - 5, yMean);
+
+			// -- range text
+			ctx.fillText(Math.round(stat.extent[0]) + 'm', margin - 5, ~~scaleY(stat.extent[0]));
+			ctx.fillText(Math.round(stat.extent[1]) + 'm', margin - 5, ~~scaleY(stat.extent[1]));
+
+			// -- filterout
+			const yFilter0 = ~~scaleY(stat.validRange[0]);
+			const yFilter1 = ~~scaleY(stat.validRange[1]);
+			canvas.line(margin, yFilter0, w, yFilter0, '#AAAAAA', 1);
+			canvas.line(margin, yFilter1, w, yFilter1, '#AAAAAA', 1);
+
+			// -- filterout text
+			ctx.fillText(Math.round(stat.validRange[0]) + 'm', margin - 5, yFilter0);
+			ctx.fillText(Math.round(stat.validRange[1]) + 'm', margin - 5, yFilter1);
+
+			console.timeEnd('seq');
+
+			canvas.bufferSaveImage();
+
+			// -- call with mouse event
+			window.fnSelect2dSeq = (x) => {
+				const line = context.lines[x];
+
+				canvas.bufferRestoreImage();
+				canvas.initImageData();
+
+				line.forEach(dot => {
+					const posY = ~~scaleY(dot[2]);
+					const posX = ~~scaleX(x);
+
+					canvas.draw32triple(posX, posY, 0xFF0000FF);
+				});
+
+				canvas.putImage();
+			}
+		}
+
+		function initSeqEvent() {
+			const eCanvas = document.getElementById('canvasSeq');
+			eCanvas.addEventListener('mousemove', (e) => {
+				if (!window.dataSourceContext) {
+					return;
+				}
+
+				if (!window.canvasSeq) {
+					return;
+				}
+
+				if (!window.seqX || !window.seqX[e.offsetX]) {
+					return;
+				}
+
+				const x = window.seqX[e.offsetX];
+
+				if (window.fnSelect2dSeq) {
+					window.fnSelect2dSeq(x);
+				}
+
+				if (window.fnSelect2d) {
+					window.fnSelect2d(x);
+				}
+
+				if (window.fnSelect3d) {
+					window.fnSelect3d(x);
+				}
+
+				const json = geoJSON(window.dataSourceContext, x);
+				document.getElementById('textArea').value = JSON.stringify(json);
+
+			});
+		}
+
+		initSeqEvent();
+	</script>
+
+	<script>
+		const ManagerEM = (() => {
+			const PATH_WORKER = '../../jsWorker/WorkerEM.js';
+			let ParserWorker = undefined;
+			let Context = undefined;
+			let fnOnMessage = undefined;
+
+			function initWorker() {
+				if (ParserWorker) {
+					// -- terminate??
+				} else {
+					ParserWorker = new Worker(PATH_WORKER);
+					ParserWorker.onmessage = (e) => {
+						const msg = e.data;
+
+						if (fnOnMessage) {
+							fnOnMessage(e);
+						}
+
+						/*
+						if ('log' === msg.type) {
+							TextLog.Append(msg.data);
+						} else if ('main' === msg.type) {
+							appendMain(msg.data);
+						} else if ('result' === msg.type) {
+							const context = e.data.data;
+							Context = context;
+		
+							if(fnOnMessage) {
+								fnOnMessage(Context);
+							}
+						}
+						*/
+					}
+				}
+			}
+			initWorker();
+
+			function queueWork(ab) {
+				ParserWorker.postMessage(ab);
+			}
+
+			function setOnMessage(fn) {
+				fnOnMessage = fn;
+			}
+
+			const resultObj = {
+				queueWork: queueWork,
+				getContext: () => Context,
+				setOnMessage: setOnMessage,
+			}
+
+			return resultObj;
+		})();
+
+
+		async function onClickSubmitURL() {
+			const e = document.getElementById('inputURL');
+			const url = e.value;
+			if (!url.match(/^http/i)) {
+				alert('invalid url, only accept starting with http');
+				return;
+			}
+
+			const ab = await fetchFileFromURL(url, TextLog.Append);
+			ManagerEM.queueWork(ab);
+		}
+
+		async function onChangeFile(e) {
+			const file = e.files[0];
+
+			const d1 = new Date();
+			TextLog.Append(`trying to read local file ${file.name}, ${file.size} bytes`);
+			const ab = await file.arrayBuffer();
+			const d2 = new Date();
+			TextLog.Append(`read done ${(d2.getTime() - d1.getTime())}ms`);
+
+			ManagerEM.queueWork(ab);
+		}
+
+		ManagerEM.setOnMessage((e) => {
+			const msg = e.data;
+			if ('log' === msg.type) {
+				TextLog.Append(msg.data);
+			} else if ('main' === msg.type) {
+				PLog.Append(msg.data);
+			} else if ('result' === msg.type) {
+				const obj = e.data.data;
+
+				// -- IMPORTANT, requires ParserEM
+				// -- its just object, not context instance, need to type cast
+				// -- Manager can not do that
+				const context = MarineParser.ParserEM.ParserContext.CreateInstanceFrom(obj);
+				window.dataSourceContext = context;
+
+				context.clearMemory();
+				const stat = basicStat(context);
+				context.stat = stat;
+
+				window.dataSourceContext = context;
+				window.scaleColor = createColorSchemeFrom();
+
+				refreshResultViews();
+
+			}
+		});
+
+		// -- debug
+		// setTimeout(onClickSubmitURL, 1);
+	</script>
+</body>
+
+</html>
