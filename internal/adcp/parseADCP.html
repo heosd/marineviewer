@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Parse ADCP</title>
+	<style>
+		section {
+			display: flex;
+			flex-direction: column;
+		}
+
+		.main {
+			display: flex;
+			flex-direction: row;
+			flex: 4;
+		}
+
+		header {
+			flex: 1;
+			display: flex;
+		}
+
+		header>div {
+			height: 140px;
+			flex: 1;
+		}
+	</style>
+</head>
+
+<body>
+	<section>
+		<header>
+			<!-- left -->
+			<div>
+			</div>
+			<!-- right -->
+			<div>
+				<form>
+					<input id="inputURL" type="text" style="width: 80%;" placeholder="url"
+						value="http://127.0.0.1:8080/raw/raw.lta">
+					<button onclick="onClickSubmitURL();return false;">Submit</button>
+				</form>
+				<input type="file" style="width: 95%;" onchange="onChangeFile(this)">
+				<textarea is="text-log" id="textLog" style="width: 80%; height: 80px"></textarea>
+			</div>
+		</header>
+
+		<div class="main">
+			<!-- List Sections -->
+			<nav style="flex: 1; overflow-y: scroll;">
+				<list-sections id="listSections" data-filter='[]' data-title="title" data-value="hID"
+					data-page-size="40">
+				</list-sections>
+			</nav>
+
+			<!-- Detail -->
+			<article id="articleDescribe" style="flex: 2; height: 80vh; overflow-y: scroll;">
+				<describe-view id="describeView"></describe-view>
+			</article>
+
+			<!-- Hexview -->
+			<article id="articleHex" style="flex: 3; height: 80vh; overflow-y: hidden;">
+				<hex-view id="hexView"></hex-view>
+			</article>
+		</div>
+	</section>
+
+	<script src="../../common/TextLog.js"></script>
+	<script src="../../common/ListSections.js"></script>
+	<script src="../../common/HexView.js"></script>
+	<script src="../../common/DescribeView.js"></script>
+	<script src="../../common/LoadFile.js"></script>
+
+	<script src="../../libs/marineparser/MarineParser.min.js"></script>
+
+	<script>
+		async function onChangeFile(e) {
+			const file = e.files[0];
+
+			const d1 = new Date();
+			// TextLog.Append(`trying to read local file ${file.name}, ${file.size} bytes`);
+			const ab = await file.arrayBuffer();
+			const d2 = new Date();
+			// TextLog.Append(`read done ${(d2.getTime() - d1.getTime())}ms`);
+
+			postProcess(ab);
+		}
+
+		async function onClickSubmitURL() {
+			const e = document.getElementById('inputURL');
+			const url = e.value;
+			if (!url.match(/^http/i)) {
+				alert('invalid url, only accept starting with http');
+				return;
+			}
+
+			const ab = await fetchFileFromURL(url, TextLog.Append);
+			postProcess(ab);
+		}
+
+		function postProcess(ab) {
+			console.log(ab);
+			const context = MarineParser.ParserPD0.ParseEnsembles(ab, true);
+
+			window.dataSourceContext = context;
+
+			refreshResultViews();
+
+			console.log(dataSourceContext);
+		}
+
+		// setTimeout(onClickSubmitURL, 1);
+	</script>
+
+	<script>
+		// -- listSections
+		const listSections = document.getElementById('listSections');
+		const filter = [];
+		listSections.setAttribute('data-filter', JSON.stringify(filter));
+		listSections.setOnClickListener((e) => {
+			const item = e.target.getDataSource();
+			console.log(item);
+
+			const context = window.dataSourceContext;
+			const dataView = new DataView(context.dataView.buffer, item.offset, item.len);
+			console.log(dataView);
+
+			const parseSectionDescribe = MarineParser.ParserPD0.GetParser(item.hID);
+			if (parseSectionDescribe) {
+				document.getElementById('articleDescribe').scrollTop = 0;
+				document.getElementById('articleHex').scrollTop = 0;
+
+				const parsed = parseSectionDescribe(dataView, 0, context.littleEndian);
+				const area = document.getElementById('describeView');
+				// console.log(area);
+				area.setDataSource(parsed);
+				console.log(parsed);
+			}
+
+			const hexView = document.getElementById('hexView');
+			hexView.setDataSource(dataView);
+		});
+
+		// -- describeView
+		const describeView = document.getElementById('describeView');
+		describeView.setOnMouseOverListener((start, size) => {
+			const selected = hexView.select(start, start + size);
+			hexView.scrollToLastSelected();
+
+			// // -- scroll to cursor
+			// const s1 = selected[0];
+			// s1.scrollIntoView();
+		});
+
+
+		function refreshResultViews() {
+			const littleEndian = true;
+
+			const context = window.dataSourceContext;
+			const ens = context.ensembles;
+			const sections = [];
+			// -- first loop offset, len only
+			ens.forEach(e => {
+				const baseOffset = e.offset;
+				const result = MarineParser.ParserPD0.Ensemble.DivideOffsets(e.ensemble.offsets, e.len, baseOffset);
+				result.forEach(s => sections.push(s));
+			});
+
+			// -- second loop, hID, title
+			sections.forEach(s => {
+				const hID = context.dataView.getUint16(s.offset, littleEndian);
+				s.hID = hID;
+				const title = MarineParser.ParserPD0.GetTitle(hID);
+				s.title = title;
+			});
+
+			listSections.setDataSource(sections);
+		}
+
+	</script>
+</body>
+
+</html>

@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<title>Parse ADCP 2D context</title>
+	<style>
+		section {
+			display: flex;
+			flex-direction: column;
+		}
+
+		.main {
+			display: flex;
+			flex-direction: row;
+			flex: 4;
+		}
+
+		header {
+			flex: 1;
+			display: flex;
+		}
+
+		header>div {
+			height: 140px;
+			flex: 1;
+		}
+	</style>
+</head>
+
+<body>
+	<section>
+		<header>
+			<!-- left -->
+			<div>
+			</div>
+			<!-- right -->
+			<div>
+				<form>
+					<input id="inputURL" type="text" style="width: 80%;" placeholder="url"
+						value="http://127.0.0.1:8080/raw/raw.lta">
+					<button onclick="onClickSubmitURL();return false;">Submit</button>
+				</form>
+				<input type="file" style="width: 95%;" onchange="onChangeFile(this)">
+				<textarea is="text-log" id="textLog" style="width: 80%; height: 80px"></textarea>
+			</div>
+		</header>
+
+		<div class="main">
+			<div id="areaResult" style="display: block">
+				<h4>Magnitude - mm/sec</h4>
+				<canvas id="canvasMagnitude" width="1000" height="200" onmousemove="onMouseMag(event)"
+					onclick="onClickMag(event)"></canvas>
+				<div style="display: inline-block; vertical-align: top;">
+					<span style="width: 200px; display: flex;">
+						<span style="flex: 1">
+							<input type="number" style="width: 3rem" id="numMagS"
+								onchange="onChangeMagScale();draw2DMagnitude();" value="0" step="500">
+						</span>
+						<span style="flex: 1; text-align: right;">
+							<input type="number" style="width: 3rem" id="numMagE"
+								onchange="onChangeMagScale();draw2DMagnitude();" value="2000" step="500">
+						</span>
+					</span>
+					<br>
+					<canvas id="canvasScaleMagnitude" width="200" height="10" style="border: solid 1px"></canvas>
+
+					<br>
+
+					<input id="animateTrue" type="radio" name="radioAnimate" value="true"
+						onchange="onChangeAnimate(this.value)">
+					<label for="animateTrue">Animate</label>
+					<input id="animateFalse" type="radio" name="radioAnimate" value="false" checked="checked"
+						onchange="onChangeAnimate(this.value)">
+					<label for="animateFalse">Stop</label>
+				</div>
+
+				<h4>Direction - degree</h4>
+				<canvas id="canvasDirection" width="1000" height="200"></canvas>
+				<div style="display: inline-block; vertical-align: top;">
+					<h5 style="text-align: center">N</h5>
+					<canvas id="canvasScaleDirection" width="100" height="100"></canvas>
+					<h5 style="text-align: center">S</h5>
+				</div>
+
+				<h4>Coordinates - Simple track</h4>
+				<canvas id="canvasCoordinates" width="400" height="400" style="border: solid 1px"
+					onmousewheel="cmWheel(event)"></canvas>
+				<div style="display: inline-block; vertical-align: top;">
+					<p id="txtMagInfo1"></p>
+					<p id="txtMagInfo2"></p>
+					<p id="txtMagInfo3"></p>
+					<p id="txtMagInfo4"></p>
+				</div>
+
+			</div>
+	</section>
+
+	<script src="../../common/Basics.js"></script>
+	<script src="../../common/TextLog.js"></script>
+	<script src="../../common/LoadFile.js"></script>
+	<script src="../../common/ColorPalettes.js"></script>
+	<script src="../../common/Canvas2DPixel.js"></script>
+	<script src="../../common/GeoSpatial.js"></script>
+
+	<script src="../../libs/marineparser/MarineParser.min.js"></script>
+</body>
+<script>
+	class MD {
+		static FRAME = 60;
+		static FRAME_HALF = MD.FRAME / 2;
+		static MAX_MAGNITUDE = 1000; // 4000 mm/s is maximum speed
+
+		constructor(cx, cy, size) {
+			// -- pos is center position
+			this.pos = [cx, cy];
+			this.size = size;
+
+			this.frame = 0;
+		}
+
+		setMD(magnitude, direction) {
+			this.md = [magnitude, direction];
+			let frame = magnitude / MD.MAX_MAGNITUDE * 2;
+			frame = frame > 2 ? 2 : (frame < 0.1 ? 0.1 : frame);
+			this.framePlus = frame;
+
+			const rad = MD.Rad(this.md[1]);
+			this.rad = rad;
+			this.radPI = rad + Math.PI;
+		}
+
+		// -- use arc
+		drawArc(ctx) {
+			ctx.beginPath();
+			const f = (this.frame - MD.FRAME_HALF) / (MD.FRAME);
+			let distance = f * this.size * 2;
+
+			const xy = MD.XY(this.md[1] - 90, distance);
+
+			ctx.arc(this.pos[0] + xy[0], this.pos[1] + xy[1], 3, this.rad - Math.PI, this.rad);
+			const alpha = 1.0 - Math.abs(distance / this.size);
+			ctx.fillStyle = 'hsla(' + ~~this.md[1] + ', 100%, 50%, ' + alpha + ')';
+			ctx.fill();
+
+			this.frame = this.frame + this.framePlus;
+
+			if (this.frame >= MD.FRAME) {
+				this.frame = 0;
+			}
+		}
+
+		// -- use Canvas2DPixel, faster but not that good
+		draw2(cp) {
+			// where cp is Canvas2DPixel
+			const f = (this.frame - MD.FRAME_HALF) / (MD.FRAME);
+			let distance = f * this.size * 2;
+
+			const xy = MD.XY(this.md[1] - 90, distance);
+			const x = ~~(this.pos[0] + xy[0]);
+			const y = ~~(this.pos[1] + xy[1]);
+
+			const alpha = ~~(128 * (Math.abs(distance / this.size)));
+			cp.draw32(x, y, (alpha << 24) | 0x00FF0000);
+
+			this.frame = this.frame + this.framePlus;
+
+			if (this.frame >= MD.FRAME) {
+				this.frame = 0;
+			}
+
+		}
+
+		drawArrow(ctx) {
+			const f = (this.frame - MD.FRAME_HALF) / (MD.FRAME);
+			let distance = f * (this.size * 2);
+
+			const xy = MD.XY(this.md[1] - 90, distance);
+
+			const alpha = 1.0 - Math.abs(distance / this.size);
+			const color = 'hsla(' + ~~this.md[1] + ', 100%, 50%, ' + alpha + ')';
+
+			drawArrow(ctx, this.pos[0] + xy[0], this.pos[1] + xy[1], this.md[1], 10, color);
+
+			this.frame = this.frame + this.framePlus;
+
+			if (this.frame >= MD.FRAME) {
+				this.frame = 0;
+			}
+		}
+
+		static Rad(degree) {
+			return Math.PI / 180 * degree;
+		}
+
+		static X(degree, distance) {
+			const radian = Math.PI / 180 * (degree);
+			return distance * Math.cos(radian);
+		}
+
+		static Y(degree, distance) {
+			const radian = Math.PI / 180 * (degree);
+			return distance * Math.sin(radian);
+		}
+
+		static XY(degree, distance) {
+			return [MD.X(degree, distance), MD.Y(degree, distance)];
+		}
+	}
+
+	let particles = [];
+
+	function drawAnimation() {
+		const canvas = new Canvas2DPixel('canvasMagnitude');
+		if (window.dataSourceContext.imageMagnitude) {
+			canvas.ctx.putImageData(window.dataSourceContext.imageMagnitude, 0, 0);
+			canvas.initImageData();
+		} else {
+			canvas.newImage();
+		}
+
+		if (true !== window.animateMagnitude) {
+			return;
+		}
+
+		for (var i = 0; i < particles.length; i++) {
+			// particles[i].drawArrow(canvas.ctx);
+			particles[i].drawArc(canvas.ctx);
+			// particles[i].draw2(canvas);
+		}
+
+		// canvas.putImage();
+
+		requestAnimationFrame(drawAnimation);
+	}
+
+	function initCanvasAnimation() {
+		const canvas = document.getElementById('canvasMagnitude');
+		const ctx = canvas.getContext('2d');
+		const w = canvas.width;
+		const h = canvas.height;
+
+		if (particles.length) {
+			particles = [];
+		}
+
+		const context = window.dataSourceContext;
+
+		const scaleX = scaleLinear([0, context.ensembles.length - 1], [0, w - 1]);
+		const scaleY = scaleLinear([0, context.ensembles[0].context.velocityMDNav.length - 1], [0, h - 1]); // -- Data usually 
+
+		for (let ix = 0; ix < context.ensembles.length; ix = ix + 5) {
+			const ens = context.ensembles[ix];
+
+			const x = ~~scaleX(ix);
+
+			for (let iy = 0; iy < ens.context.velocityMDNav.length; iy = iy + 5) {
+				const md = ens.context.velocityMDNav[iy];
+				const y = ~~scaleY(iy);
+				if (1000 < md[0] || MarineParser.ParserPD0.INVALID_VALUE === md[0]) {
+					continue;
+				}
+				const particle = new MD(x, y, 5);
+				particle.setMD(md[0], md[1]);
+				particles.push(particle);
+			}
+		}
+
+		drawAnimation();
+	}
+
+</script>
+
+<script>
+	async function onChangeFile(e) {
+		const file = e.files[0];
+
+		const d1 = new Date();
+		// TextLog.Append(`trying to read local file ${file.name}, ${file.size} bytes`);
+		const ab = await file.arrayBuffer();
+		const d2 = new Date();
+		// TextLog.Append(`read done ${(d2.getTime() - d1.getTime())}ms`);
+
+		postProcess(ab);
+	}
+
+	async function onClickSubmitURL() {
+		const e = document.getElementById('inputURL');
+		const url = e.value;
+		if (!url.match(/^http/i)) {
+			alert('invalid url, only accept starting with http');
+			return;
+		}
+
+		const ab = await fetchFileFromURL(url, TextLog.Append);
+		postProcess(ab);
+	}
+
+	function postProcess(ab) {
+		console.log(ab);
+		const context = MarineParser.ParserPD0.ParseEnsembles(ab, true);
+		MarineParser.ParserPD0.ParserTest.ParseEnsemblesContext(context);
+
+		window.dataSourceContext = context;
+
+		// context.ensembles[0].context.coord;
+
+		const countVelocityParse = -1;
+		const skip = 1;
+		context.ensembles.forEach(ens => {
+			// -- Velocity
+			// context.ensembles[0].context.velocityMDs = [];
+			ens.context.parseVelocity2D(countVelocityParse, skip);
+			ens.context.parseMDNav();
+
+			// -- Navigation
+			// context.ensembles[0].context.posFirst, lastPos
+			ens.context.parsePosition();
+		});
+
+		refreshResultViews();
+
+		console.log(dataSourceContext);
+	}
+
+	// setTimeout(onClickSubmitURL, 1);
+</script>
+
+<script>
+	// -- Draw color scale
+	// -- Magnitude
+	function drawScaleMagnitude(colorSrc) {
+		const colors = colorSrc.map(Canvas2DPixel.Str2Abgr);
+
+		const c = new Canvas2DPixel('canvasScaleMagnitude');
+		c.newImage();
+
+		const scheme = createColorSceheme([0, c.w], colors);
+
+		for (let index = 0; index < c.w; index++) {
+			const color = scheme(index);
+			for (let y = 0; y < 50; y++) {
+				c.draw32(index, y, color);
+			}
+		}
+		c.putImage();
+	}
+
+	function reinitColorScheme(domain, colorSrc) {
+		const colors = colorSrc.map(Canvas2DPixel.Str2Abgr);
+
+		const scheme = createColorSceheme(domain, colors);
+		return scheme;
+	}
+
+	// -- Direction
+	function drawScaleDirection(colorSrc) {
+		// document.getElementById('areaResult').style.display = 'block';
+
+		// -- Direction circle
+		const scaleDirection = document.getElementById("canvasScaleDirection");
+		const ctxScaleDirection = scaleDirection.getContext("2d");
+
+		const CX = scaleDirection.width / 2,
+			CY = scaleDirection.height / 2,
+			sx = CX,
+			sy = CY;
+
+		const colors = colorSrc.map(Canvas2DPixel.Str2Abgr);
+		const scheme = createColorSceheme([0, 359], colors);
+
+		for (let d = 0; d < 360; d = d + 1) {
+			const rad = (d + 270) * (Math.PI) / 180;
+			ctxScaleDirection.strokeStyle = colorSrc[d];
+			ctxScaleDirection.beginPath();
+			ctxScaleDirection.moveTo(CX, CY);
+			ctxScaleDirection.lineTo(CX + sx * Math.cos(rad), CY + sy * Math.sin(rad));
+			ctxScaleDirection.stroke();
+		}
+
+		return scheme;
+	}
+
+
+	function initColorScheme() {
+		const colorMag = colorPalettes.hsl.slice(0, 239);
+		const colorDir = colorPalettes.hsl;
+
+		drawScaleMagnitude(colorMag);
+		const schemeDir = drawScaleDirection(colorDir);
+
+		window.schemeDir = schemeDir;
+	}
+
+	initColorScheme();
+
+	// -- End of color scale
+
+	// -- draw
+	function refreshResultViews() {
+		draw2DMagnitude();
+		draw2DDirection();
+		draw2DCoordinates();
+		initCanvasAnimation();
+	}
+
+	function draw2DMagnitude() {
+		const context = window.dataSourceContext;
+
+		const c = new Canvas2DPixel('canvasMagnitude');
+		c.newImage();
+
+		const scaleX = scaleLinear([0, context.ensembles.length - 1], [0, c.w - 1]);
+		const scaleY = scaleLinear([0, context.ensembles[0].context.velocityMDNav.length - 1], [0, c.h - 1]); // -- Data usually 
+
+		const s = ~~document.getElementById('numMagS').value;
+		const e = ~~document.getElementById('numMagE').value;
+		const schemeMag = reinitColorScheme([s, e], colorPalettes.hsl.slice(0, 239));
+		const color = schemeMag;
+
+		window.scaleMagnitudeX = scaleLinear([0, c.w - 1], [0, context.ensembles.length - 1]);
+		window.scaleMagnitudeY = scaleLinear([0, c.h - 1], [0, context.ensembles[0].context.velocityMDNav.length - 1]);
+
+		// for(let ix = 0; ix < 5; ix++) {
+		for (let ix = 0; ix < context.ensembles.length; ix++) {
+			const ens = context.ensembles[ix];
+
+			const x = ~~scaleX(ix);
+
+			for (let iy = 0; iy < ens.context.velocityMDNav.length; iy++) {
+				const md = ens.context.velocityMDNav[iy];
+				const y = ~~scaleY(iy);
+
+				let abgr = color(md[0]);
+				if (MarineParser.ParserPD0.INVALID_VALUE === md[0]) {
+					abgr = 0xFF000000;
+				}
+
+				for (let fill = 0; fill < 10; fill++) {
+					c.draw32triple(x, y + fill, abgr);
+				}
+			}
+		}
+
+		c.putImage();
+
+		// -- save image
+		context.imageMagnitude = c.ctx.getImageData(0, 0, c.w, c.h);
+	}
+
+	function draw2DDirection() {
+		const context = window.dataSourceContext;
+
+		const c = new Canvas2DPixel('canvasDirection');
+		c.newImage();
+
+		const scaleX = scaleLinear([0, context.ensembles.length - 1], [0, c.w - 1]);
+		const scaleY = scaleLinear([0, context.ensembles[0].context.velocityMDNav.length - 1], [0, c.h - 1]); // -- Data usually 
+
+		const color = window.schemeDir;
+
+		// for(let ix = 0; ix < 5; ix++) {
+		for (let ix = 0; ix < context.ensembles.length; ix++) {
+			const ens = context.ensembles[ix];
+
+			const x = ~~scaleX(ix);
+
+			for (let iy = 0; iy < ens.context.velocityMDNav.length; iy++) {
+				const md = ens.context.velocityMDNav[iy];
+				const y = ~~scaleY(iy);
+				let abgr = color(md[1]);
+
+				if (MarineParser.ParserPD0.INVALID_VALUE === md[1]) {
+					abgr = 0xFF000000;
+				}
+
+				for (let fill = 0; fill < 10; fill++) {
+					c.draw32triple(x, y + fill, abgr);
+				}
+			}
+		}
+
+		c.putImage();
+	}
+
+	function drawArrow(ctx, x, y, degree, size, color = black) {
+		degree = degree - 90;
+		const half = size / 2;
+		const ttt = size / 3;
+
+		const x0 = MD.X((degree + 180) % 360, half);
+		const y0 = MD.Y((degree + 180) % 360, half);
+
+		const x1 = MD.X(degree, half);
+		const y1 = MD.Y(degree, half);
+
+		ctx.beginPath();
+
+		ctx.moveTo(x + x0, y + y0);
+		ctx.lineTo(x + x1, y + y1);
+
+		const xl = MD.X((degree + 300) % 360, ttt);
+		const yl = MD.Y((degree + 300) % 360, ttt);
+
+		const xr = MD.X((degree + 60) % 360, ttt);
+		const yr = MD.Y((degree + 60) % 360, ttt);
+
+		ctx.lineTo(x + xl, y + yl);
+		ctx.moveTo(x + x1, y + y1);
+		ctx.lineTo(x + xr, y + yr);
+		ctx.lineWidth = 1;
+
+		ctx.strokeStyle = color;
+		ctx.stroke();
+	}
+
+
+	const d2pZoom = new Degree2Pixel();
+	d2pZoom.zoom(10);
+
+	function draw2DCoordinates(centerPos) {
+		const context = window.dataSourceContext;
+		const posFirst = context.ensembles[0].context.posFirst;
+
+		if (!posFirst) {
+			console.log('Can not draw coordinates, there is no navigation section');
+			return;
+		}
+
+		// -- First goes to center by default
+		if (!centerPos) {
+			centerPos = posFirst;
+		}
+
+		const c = new Canvas2DPixel('canvasCoordinates');
+		c.newImage();
+
+		d2pZoom.setCenterPos(centerPos);
+		d2pZoom.setMapSize([c.w, c.h]);
+
+		context.ensembles.forEach((ens, i) => {
+			const pos = d2pZoom.getPixel(ens.context.posFirst);
+			c.draw32triple(pos[0], pos[1], 0xFFFF0000);
+		});
+
+		// -- Red Dot for center pos
+		c.draw32triple(d2pZoom.mapPixel[0], d2pZoom.mapPixel[1], 0xFF0000FF);
+
+		c.putImage();
+	}
+
+	function cmWheel(e) {
+		if (0 > e.deltaY) {
+			d2pZoom.zoomIn();
+		} else {
+			d2pZoom.zoomOut();
+		}
+
+		draw2DCoordinates(window.highlightingPos);
+
+		e.preventDefault();
+	}
+
+	function onChangeMagScale() {
+		// let s = parseFloat(document.getElementById('numMagS').value);
+		// let e = parseFloat(document.getElementById('numMagE').value);
+
+		// s = isNaN(s) ? 0 : s;
+		// e = isNaN(e) ? 2000 : e;
+
+		// window.scaleMag = [s, e];
+	}
+
+	function onChangeAnimate(animate) {
+		if ('true' === animate) {
+			window.animateMagnitude = true;
+			drawAnimation();
+		} else {
+			window.animateMagnitude = false;
+		}
+	}
+
+	function onMouseMag(e) {
+		if (true === window.toggleMag) {
+			return;
+		}
+
+		const context = window.dataSourceContext;
+
+		// -- x, y is relative offset of canvas
+		const x = e.offsetX;
+		const y = e.offsetY;
+
+		// -- v is [col Number, row Number] of brief, where row is in md or mdNav
+		const xx = ~~window.scaleMagnitudeX(x);
+		const yy = ~~window.scaleMagnitudeY(y);
+
+		const ensembleAtX = context.ensembles[xx];
+		if (ensembleAtX) {
+			const ensContext = ensembleAtX.context;
+			const posFirst = ensContext.posFirst;
+			const posLast = ensContext.posLast;
+			draw2DCoordinates(ensContext.posFirst);
+			window.highlightingPos = ensContext.posFirst;
+
+			const linkFirst = `https://www.google.com/maps?z=6&q=${posFirst[0]},${posFirst[1]}`;
+			const linkLast = `https://www.google.com/maps?z=6&q=${posLast[0]},${posLast[1]}`;
+			const strFirst = `${posFirst[0].toFixed(6)}, ${posFirst[1].toFixed(6)}`;
+			const strLast = `${posLast[0].toFixed(6)}, ${posLast[1].toFixed(6)}`;
+
+			const md = ensContext.velocityMDNav[yy];
+
+			if (md) {
+				const e2 = document.getElementById('txtMagInfo2');
+				const e3 = document.getElementById('txtMagInfo3');
+				const e4 = document.getElementById('txtMagInfo4');
+				e2.innerHTML = `<a target="locationFirst" href="${linkFirst}">[${strFirst}]</a> ~ <a target="locationLast" href="${linkLast}">[${strLast}]</a>`;
+				e3.innerHTML = `ADCP - ${md[0].toFixed(2)}mm/s, ${md[1].toFixed(0)}&deg;`;
+			}
+		}
+		return;
+	}
+
+	function onClickMag(e) {
+		window.toggleMag = !window.toggleMag;
+
+		if (true !== window.toggleMag) {
+			window.onMouseMag(e);
+		}
+	}
+
+	function findMapMagnitude(x) {
+		const keysX = Object.keys(window.mapMagnitude).reverse();
+		const xidx = keysX.findIndex(key => 0 >= ~~key - x);
+		const keysY = Object.keys(window.mapMagnitude[keysX[xidx]]).reverse();
+		const yidx = keysY.findIndex(key => 0 >= ~~key - y);
+
+		return window.mapMagnitude[keysX[xidx]][keysY[yidx]];
+	}
+</script>
+
+</html>

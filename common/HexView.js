@@ -2,10 +2,57 @@ class HexView extends HTMLElement {
     constructor(ds) {
         super();
         this.lastSelected = [];
+
+		this.execShadow();
+
         if(ds) {
             this.setDataSource(ds);
         }
     }
+
+	static TEMPLATE_STYLE = `
+.container {
+	display: grid;
+	grid-template-columns: 3rem 500px 200px;
+	align-content: start;
+}
+
+.left {
+	display: grid;
+	grid-template-columns: repeat(16, 1fr);
+	font-family: monospace;
+}
+
+.right {
+	display: grid;
+	grid-template-columns: repeat(16, 1fr);
+	font-family: monospace;
+}
+
+.address {
+	display: grid;
+	grid-template-columns: 1fr;
+	font-family: monospace;
+}
+
+.color-header {
+	color: grey;
+}
+`;
+
+	static TEMPLATE_HTML = `
+<div class="container">
+	<div></div>
+	<div id="hexHeader" class="left color-header"></div>
+	<div id="asciiHeader" class="right"></div>
+</div>
+<hr>
+<div id="result" class="container" style="height: 600px; overflow-y: scroll">
+	<div id="address" class="address color-header"></div>
+	<div id="hex" class="left"></div>
+	<div id="ascii" class="right"></div>
+</div>
+`;
 
     connectedCallback() {
         // browser calls this method when the element is added to the document
@@ -32,54 +79,70 @@ class HexView extends HTMLElement {
 
     // there can be other element methods and properties
 
+	execShadow() {
+		const shadowRoot = this.attachShadow({ mode: 'open' });
+		const style = document.createElement('style');
+		const body = document.createElement('div');
+		style.textContent = HexView.TEMPLATE_STYLE;
+		body.innerHTML = HexView.TEMPLATE_HTML;
+		
+		shadowRoot.appendChild(style);
+		shadowRoot.appendChild(body);
+		this.shadow = shadowRoot;
+
+		this.$result = this.shadow.getElementById('result');
+		this.$address = this.shadow.getElementById('address');
+		this.$hex = this.shadow.getElementById('hex');
+		this.$ascii = this.shadow.getElementById('ascii');
+		this.$hexHeader = this.shadow.getElementById('hexHeader');
+	}
+
     setDataSource(ds) {
         this.ds = ds;
         this.refreshChild();
     }
 
     refreshChild() {
-        this.innerHTML = '';
+		// -- clear
+		this.$hex.innerHTML = '';
+		this.$ascii.innerHTML = '';
 
         if(!this.ds || 0 === this.ds.byteLength) {
             return;
         }
 
-        // -- flex 1 : 2
-        this.style.display = 'flex';
-
-        // -- left
-        const divLeft = document.createElement('div');
-        divLeft.id = 'divHex';
-        divLeft.style.flex = 3;
-        divLeft.style.display = 'grid';
-        divLeft.style.gridTemplateColumns = 'repeat(16, 1fr)';
-
-        // -- right
-        const divRight = document.createElement('div');
-        divRight.id = 'divAscii';
-        divRight.style.flex = 1;
-        divRight.style.display = 'grid';
-        divRight.style.gridTemplateColumns = 'repeat(16, 1fr)';
-
+		// -- address
+		const addrLen = Math.floor(this.ds.byteLength / 16) + 1;
+		this.$address.innerHTML = '';
+		for(let i = 0; i < addrLen; i++) {
+			const addrCode = (i * 16).toString(16).toUpperCase().padStart(4, '0');
+			const span = document.createElement('span');
+			span.textContent = addrCode;
+			this.$address.appendChild(span);
+		}
 
         for(let i = 0; i < this.ds.byteLength; i++) {
             const byte = this.ds.getUint8(i);
 
             // -- left
             const span1 = document.createElement('span');
-            span1.style.fontFamily = 'monospace';
             span1.textContent = byte.toString(16).toUpperCase().padStart(2, '0');
-            divLeft.appendChild(span1);
+			this.$hex.appendChild(span1);
 
             // -- right
             const span2 = document.createElement('span');
-            span2.style.fontFamily = 'monospace';
             span2.textContent = String.fromCharCode(byte);
-            divRight.appendChild(span2);
+			this.$ascii.appendChild(span2);
         }
 
-        this.appendChild(divLeft);
-        this.appendChild(divRight);
+		// -- draw header
+		this.$hexHeader.innerHTML = '';
+		for(let i = 0; i < 16; i++) {
+			const text = '0' + i.toString(16).toUpperCase();
+			const span = document.createElement('span');
+			span.textContent = text;
+			this.$hexHeader.appendChild(span);
+		}
     }
 
     select(from, to) {
@@ -89,8 +152,8 @@ class HexView extends HTMLElement {
 
         const saveThis = [];
 
-        const divLeft = document.getElementById('divHex');
-        const divRight = document.getElementById('divAscii');
+        const divLeft = this.$hex;
+        const divRight = this.$ascii;
 
         for(let i = from; i < to; i++) {
             const spanLeft = divLeft.childNodes[i];
@@ -108,6 +171,10 @@ class HexView extends HTMLElement {
 
         return this.lastSelected;
     }
+
+	scrollToLastSelected() {
+		this.lastSelected[0].scrollIntoView();
+	}
 }
 
 customElements.define('hex-view', HexView);

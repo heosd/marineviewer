@@ -1,4 +1,6 @@
 // http://127.0.0.1:8080/raw.all
+const _FETCH_AB = [];
+
 async function fetchFileFromURL(url, fnLog) {
 	if(!fnLog) {
 		fnLog = () => {}
@@ -18,10 +20,7 @@ async function fetchFileFromURL(url, fnLog) {
 		const decompressedStream = blob.stream().pipeThrough(ds);
 		const ab = await new Response(decompressedStream).arrayBuffer();
 		resultArrayBuffer = ab;
-	} else if (url.match(/\.all$/i) || url.match(/\.mb58$/i)) {
-		const ab = await r.arrayBuffer();
-		resultArrayBuffer = ab;
-	} else if (url.match(/\.sgy$/i)) {
+	} else if(_FETCH_AB.some(regex => url.match(regex))) {
 		const ab = await r.arrayBuffer();
 		resultArrayBuffer = ab;
 	}
@@ -34,3 +33,13 @@ async function fetchFileFromURL(url, fnLog) {
 		fnLog(`invalid url or invalid file type, try another url`);
 	}
 }
+
+(() => {
+	function pushRegexToList(ext) {
+		_FETCH_AB.push(new RegExp(`\\.${ext}$`, 'i'))
+	}
+
+	// /\.all$/i
+	['all', 'mb58', 'sgy', 'lta', 'sta', 'enr', 'ens', 'enx'].forEach(pushRegexToList);
+
+})();

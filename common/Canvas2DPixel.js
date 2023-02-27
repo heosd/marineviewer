@@ -125,6 +125,19 @@ class Canvas2DPixel {
 		this.ctx.lineTo(x2, y2);
 		this.ctx.stroke();
 	}
+
+	static Str2Abgr(str) {
+		const rgb = str.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})/i);
+		if(!rgb) {
+			return undefined;
+		}
+
+		const r = parseInt(rgb[1], 16);
+		const g = parseInt(rgb[2], 16);
+		const b = parseInt(rgb[3], 16);
+		const Abgr = 0xFF000000 | (r << 16) | (g << 8) | b;
+		return Abgr
+	}
 }
 
 // const c = new Canvas2DPixel('canvas');
@@ -132,3 +145,4 @@ class Canvas2DPixel {
 // c.draw32(10, 10, 0xFF000000);
 // c.draw32(20, 20, 0xFFCC0000);
 // c.putImage();
+// Canvas2DPixel.Str2Abgr('#AA9933')
