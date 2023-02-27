@@ -155,6 +155,8 @@
 			ManagerEM.queueWork(ab);
 		}
 
+		ManagerEM.initWorker('../../jsWorker/WorkerEM.js');
+
 		ManagerEM.setOnMessage((e) => {
 			const msg = e.data;
 			if ('log' === msg.type) {

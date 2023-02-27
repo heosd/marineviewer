@@ -1,15 +1,15 @@
 // -- Just single instance
 const ManagerEM = (() => {
-	const PATH_WORKER = '/jsWorker/WorkerEM.js';
+	// const PATH_WORKER = '/jsWorker/WorkerEM.js';
 	let ParserWorker = undefined;
 	let Context = undefined;
 	let fnOnMessage = undefined;
 
-	function initWorker() {
+	function initWorker(path) {
 		if (ParserWorker) {
 			// -- terminate??
 		} else {
-			ParserWorker = new Worker(PATH_WORKER);
+			ParserWorker = new Worker(path);
 			ParserWorker.onmessage = (e) => {
 				const msg = e.data;
 
@@ -34,7 +34,7 @@ const ManagerEM = (() => {
 			}
 		}
 	}
-	initWorker();
+	//initWorker();
 
 	function queueWork(ab) {
 		ParserWorker.postMessage(ab);
@@ -45,6 +45,7 @@ const ManagerEM = (() => {
 	}
 
 	const resultObj = {
+		initWorker: initWorker,
 		queueWork: queueWork,
 		getContext: () => Context,
 		setOnMessage: setOnMessage,
