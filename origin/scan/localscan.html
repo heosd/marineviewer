@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local scanner with Marine Viewer</title>
+
+    <link rel="stylesheet" href="./app_localscan.css">
+    <link rel="stylesheet" href="../../libs/leaflet/leaflet.css">
+</head>
+
+<body>
+    <section class="select-root">
+        <article>
+            <button class="select-root-button" style="width: 50vw" onclick="app.showRootPicker()"
+                onmouseover="document.getElementById('select-root-help').style.display='block'"
+                onmouseleave="document.getElementById('select-root-help').style.display='none'">
+                Select</button>
+        </article>
+
+        <article id="select-root-help" style="display: none">
+            <p>select data root directory</p>
+        </article>
+    </section>
+
+    <section class="root-selected">
+        <article class="meta-container1">
+            <div class="meta-button">
+                <button onclick="app.createMetaCSV()">create marine_meta.csv</button>
+                <button onclick="app.getMetaCSV()">MetaCSV</button>
+                <button onclick="app.parseMetaCSV()">Parse</button>
+                <button onclick="app.deleteAllMetaCSV()">delete all marine_meta.csv</button>
+                <br>
+                <span id="statusMetaCSV"></span>
+            </div>
+            <div class="meta-list">
+                <select id="select-meta-files" multiple is="select-meta-files">
+                </select>
+            </div>
+
+            <div id="meta-detail" class="meta-detail"></div>
+        </article>
+        <article class="meta-container2">
+            <div id="meta-map" class="meta-map">
+                <div id="map"></div>
+            </div>
+            <div id="meta-plot" class="meta-plot"></div>
+        </article>
+    </section>
+
+    <script src="../../libs/marineparser/MarineParser.min.js"></script>
+    <script src="../../common/MarineFile.js"></script>
+    <!-- https://observablehq.com/plot/getting-started -->
+    <script src="../../libs/d3/d3.js"></script>
+    <script src="../../libs/observable/plot.js"></script> <!-- observable/plot@0.6 -->
+    <script src="../../libs/leaflet/leaflet.js"></script>
+    <script src="./app_localscan.js"></script>
+
+    <script>
+    </script>
+</body>
+
+</html>

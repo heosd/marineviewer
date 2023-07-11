@@ -323,6 +323,44 @@
 		console.log(dataSourceContext);
 	}
 
+	// -- parent message
+	function setMessageHandler() {
+		window.addEventListener('message', async (e) => {
+			if (e.data.rootHandler) {
+				const obj = e.data;
+				const handle = await requestFileHandle(obj.rootHandler, obj.files[0]);
+				const file = await handle.getFile();
+				const ab = await file.arrayBuffer();
+
+				postProcess(ab);
+			}
+		});
+	}
+
+	async function requestFileHandle(handle, path) {
+		const sep = path.split('/');
+
+		let myHandle = handle;
+		// -- ignore first .
+		for (let i = 1; i < sep.length - 1; i++) {
+			const p = sep[i];
+			myHandle = await myHandle.getDirectoryHandle(p);
+		}
+
+		return myHandle.getFileHandle(sep.at(-1));
+	}
+
+	// -- should call everything loaded
+	function askOpener() {
+		if (window.opener) {
+			console.log('Ask opener');
+			window.opener.postMessage('ask');
+		}
+	}
+
+	setMessageHandler();
+	askOpener();
+
 	// setTimeout(onClickSubmitURL, 1);
 </script>
 
