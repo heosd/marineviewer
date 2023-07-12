@@ -1,0 +1,98 @@
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+section {
+    width: 210mm;
+    height: 297mm;
+    padding: 10mm;
+    margin: 10mm auto;
+    border: 1px #888 dotted;
+}
+
+@page {
+    size: A4;
+    margin: 0;
+}
+
+@media print {
+    html,
+    body {
+        width: 210mm;
+        height: 297mm;
+        background: #fff;
+    }
+
+    section {
+        margin: 0;
+        border: initial;
+        border-radius: initial;
+        width: initial;
+        min-height: initial;
+        box-shadow: initial;
+        background: initial;
+        page-break-after: always;
+    }
+}
+
+/* File section */
+.section-file {
+    display: block;
+}
+
+.abs {
+    position: absolute;
+}
+
+#file-area {
+    position: relative;
+}
+
+.file-box {
+    width: 190mm;
+    height: 100mm;
+}
+
+#file {
+    display: absolute;
+    border: 2px dashed grey;
+}
+
+#file::file-selector-button {
+    display: none;
+}
+
+/* End of File section */
+
+.section-hide {
+    display: none;
+}
+
+/* front page */
+.font1-fantasy {
+    color: #1E4174;
+    font-family: fantasy;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.font-lucida {
+    font-family: "Lucida Console"
+}
+
+.font-arial {
+    font-family: "Arial"
+}

@@ -574,6 +574,8 @@ const app = (() => {
             lastChild = open('../em/parseEM_context3d.html', idChild);
         } else if ('PD0' === d.type_g2) {
             lastChild = open('../../internal/adcp/parseADCP_context2d.html', idChild);
+        } else if ('CTD9' === d.type_g2) {
+            lastChild = open('../../internal/ctd/parseCTD.html', idChild);
         }
     }
 

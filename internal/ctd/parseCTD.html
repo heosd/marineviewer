@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SeaBird CTD View</title>
+
+	<link rel="stylesheet" href="../../css/report.css">
+</head>
+
+<body>
+	<!-- File section -->
+	<section id="section-file" class="section-file">
+		<label id="file-area" for="file">
+			<div class="abs file-box" style="display: grid; align-items: center;">
+				<div style="text-align: center;">
+					<h1 id="txtDragFiles">Drag / Select files</h1>
+				</div>
+			</div>
+			<input id="file" type="file" multiple="true" onchange="onChangeFile(this)" class="abs file-box">
+		</label>
+	</section>
+
+	<section id="areaDetails" class="section-result">
+	</section>
+
+	<script src="../../common/Basics.js"></script>
+	<script src="../../common/GeoSpatial.js"></script>
+	<script src="../../common/Canvas2DPixel.js"></script>
+	<script src="../../common/SVGE.js"></script>
+
+	<script src="../../libs/d3/d3.js"></script>
+	<script src="../../libs/observable/plot.js"></script>
+	<script src="../../libs/marineparser/MarineParser.min.js"></script>
+	<script src="./CTDElements.js"></script>
+
+	<script>
+		function init() {
+			const fileList = new MarineParser.ParserCTD.CTDFileList();
+			window.fileList = fileList;
+		}
+
+		function onChangeFile() {
+			const e = document.getElementById('file');
+
+			Array.from(e.files).forEach(file => {
+				fileList.addFile(file);
+			});
+
+			e.style.display = 'none';
+
+			postProcess();
+		}
+
+		async function postProcess() {
+			const groups = fileList.getGroups();
+			const len = groups.length;
+			for (let i = 0; i < len; i++) {
+				const group = groups[i];
+				console.time('parse');
+				await group.parse();
+				parseCTDReport(group);
+				console.timeEnd('parse');
+				group.getHex().unload();
+			}
+
+			// -- all parsed
+			groups.sort((a, b) => a.summary.hdr.utc.getTime() - b.summary.hdr.utc.getTime());
+
+			refreshDetails(groups);
+
+			// -- show result sections
+			Array.from(document.getElementsByClassName('section-result')).forEach(e => e.style.display = 'block');
+		}
+
+		function downloadObjectAsJson(exportObj, exportName) {
+			var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
+			var downloadAnchorNode = document.createElement('a');
+			downloadAnchorNode.setAttribute("href", dataStr);
+			downloadAnchorNode.setAttribute("download", exportName + ".json");
+			document.body.appendChild(downloadAnchorNode); // required for firefox
+			downloadAnchorNode.click();
+			downloadAnchorNode.remove();
+		}
+
+		function summaryCTDReport(groups) {
+			const detail = document.getElementById('resultDetail');
+			detail.setDataSource(groups[0]);
+			
+
+			// if (groups.at(-1).summary.dateHex[1]) {
+
+			// 	// -- cruise time
+			// 	const msCruise = groups.at(-1).summary.dateHex[1].getTime() - groups[0].summary.dateHex[0].getTime();
+			// 	document.getElementById('txtCruiseTime').textContent = msToReadable(msCruise);
+
+			// 	// -- casting count
+			// 	document.getElementById('txtCTDCasting').textContent = groups.length;
+
+			// 	// -- casting time
+			// 	const msCasting = groups.map(group => group.summary.dateHex[1].getTime() - group.summary.dateHex[0].getTime()).reduce((a, b) => a + b, 0);
+			// 	document.getElementById('txtCTDCastingMin').textContent = msToReadable(msCasting);
+
+			// 	document.getElementById('txtNavigationMin').textContent = msToReadable(msCruise - msCasting);
+			// }
+
+			// // -- order of files
+			// groups.forEach(group => {
+			// 	document.getElementById('ctdGroupList').addGroup(group);
+			// });
+		}
+
+		function refreshDetails(groups) {
+			const parents = document.getElementById('areaDetails');
+			groups.forEach(g => {
+				const e = new CTDGroupDetail2(g);
+				parents.appendChild(e);
+
+				const pageBreak = document.createElement('div');
+				pageBreak.style.pageBreakBefore = 'always';
+				parents.appendChild(pageBreak);
+			});
+
+			// -- remove last page breaker
+			parents.childNodes[parents.childNodes.length - 1].remove();
+		}
+
+		function parseCTDReport(group) {
+			group.summary = {};
+
+			parseCTDReportGroup(group);
+			parseCTDReportHex(group);
+			parseCTDReportXMLCON(group);
+			parseCTDReportBL(group);
+		}
+
+		function findDownCast(depthDiff) {
+			// -- just difference points
+			const diffPoint = [];
+			let lastMeanSign = 0;
+			for (let i = 0; i < depthDiff.length; i++) {
+				const item = depthDiff[i];
+
+				const sign = item.mean > 0 ? 1 : (item.mean < 0 ? -1 : 0);
+				if (lastMeanSign !== sign) {
+					diffPoint.push(item);
+				}
+
+				lastMeanSign = sign;
+			}
+
+			// -- when theres no downcast
+			if (0 === diffPoint.length) {
+				// -- just start to end
+				return [depthDiff[0].idx, depthDiff.at(-1).idx];
+			}
+
+			// -- points to group start Index ~ end Index
+			const diffGroup = [];
+			for (let i = 1; i < diffPoint.length; i++) {
+				const prev = diffPoint[i - 1];
+				const item = diffPoint[i];
+
+				const mm = { mean: prev.mean, s: prev.idx, e: item.idx };
+				diffGroup.push(mm);
+			}
+
+			// -- find the biggest signed duration, max(e - s)
+			const maxDiffGroup = diffGroup.reduce((a, b) => {
+				if (0 >= b.mean) {
+					return a;
+				}
+
+				const ad = a.e - a.s;
+				const bd = b.e - b.s;
+				if (bd >= ad) {
+					return b;
+				}
+				return a;
+			}, diffGroup[0]);
+
+			// maxDiffGroup.e is the deepest, but maxDiffGroup.s is usually 50m
+
+			// -- reverse from maxGroup until mean is NEGATIVE
+			const idx = diffGroup.filter(d => d.s < maxDiffGroup.s).findLastIndex(d => d.mean < 0);
+			// -- idx is NEGATIVE, next group is usually mean 0, around 4m ~ 6m
+			const minDiffGroup = diffGroup[idx + 1];
+
+			// console.log(diffPoint);
+			// console.log(diffGroup);
+			// console.log(minDiffGroup, maxDiffGroup);
+
+			// use minDiffGroup.s ~ maxDiffGroup.e
+			return [minDiffGroup.s, maxDiffGroup.e];
+		}
+
+		function parseCTDReportGroup(group) {
+			// file name to summary
+
+			let fileName = undefined, fileExt = [];
+			const files = Object.values(group.files).filter(d => d).map(d => {
+				return {
+					name: d.name,
+					lastModified: d.lastModified,
+					size: d.size
+				};
+			});
+
+			group.summary.files = files;
+		}
+
+		function parseCTDReportHex(group) {
+			const hex = group.getHex();
+			const len = hex.getLength();
+
+			let step = 20;
+
+			if (len > 10000) {
+				step = 100;
+			}
+
+			const obj = {
+				// only for primary frequency and first altimeter
+				a: [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER], // altimeter
+				t: [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER], // temperature
+				s: [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER], // salinity
+				d: [Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER], // depth
+			};
+
+			const result = [];
+			const depthDiff = []; // first is zero
+			let lastDepth = 0;
+			const three = [];
+			const round = (f) => MarineParser.ParserCTD.SeaConvert.Round(f, 5);
+			const toMin = (idx, c) => {
+				const v = c.value;
+				const line = [idx, round(v.f0), round(v.f1psu), round(v.f2depth), round(v.altimeter)];
+				return line;
+			}
+
+			for (let i = 100; i < len; i = i + step) {
+				const c = hex.parseValue(i); // this is full parse, can be optimized
+				const v = c.value;
+				const line = toMin(i, c);
+				result.push(line);
+
+				let diff = Math.round(v.f2depth - lastDepth);
+				lastDepth = v.f2depth;
+				three.push(diff);
+
+				if (3 < three.length) {
+					three.shift();
+				}
+
+				const mean = Math.round(three.reduce((a, b) => a + b, 0) / three.length);
+				depthDiff.push({ diff: diff, idx: i, mean: mean });
+
+				// -- TODO change this values with in downcast
+				minMax(obj, 'a', c.value.altimeter);
+				minMax(obj, 't', c.value.f0);
+				minMax(obj, 's', c.value.f1psu);
+				minMax(obj, 'd', c.value.f2depth);
+			}
+
+			const downcast = findDownCast(depthDiff);
+			const cs = toMin(downcast[0], hex.parseValue(downcast[0]));
+			const ce = toMin(downcast[1], hex.parseValue(downcast[1]));
+			// -- 1800 samples for 37MB hex
+			const samples = result.filter(item => item[0] >= downcast[0] && item[0] < downcast[1]);
+
+			for (const [k, v] of Object.entries(obj)) {
+				group.summary[k] = v;
+			}
+
+			// -- date
+			let nmeaDuration = [hex.parseValue(100).date, hex.parseValue(len - 100).date];
+			if (undefined === nmeaDuration[0] || undefined === nmeaDuration[1]) {
+				console.log('No nmea Date, date from hdr and divide by 24hz as 1sec');
+				nmeaDuration[0] = hex.getParsedHDR().utc;
+				// 24 lines of hex as 1 sec
+				const ms = nmeaDuration[0].getTime() + ((hex.getLength() / 24) * 1000);
+				nmeaDuration[1] = new Date(Math.round(ms));
+			}
+			group.summary.dateHex = nmeaDuration;
+			group.summary.lengthHex = hex.getLength();
+
+			// -- saves samples
+			group.summary.samples = samples;
+
+			// -- saves name again
+			group.summary.name = group.name;
+
+			// -- hdr from hex
+			group.summary.hdr = hex.getParsedHDR();
+
+			// -- parsingDesc
+			group.summary.descHex = hex.parsingDesc;
+		}
+
+		function prettyPrintSensor(item) {
+			if (item) {
+				const type = item.type.slice(0, 3);
+				return `${type}_${item.serial}`;
+			}
+
+			return undefined;
+		}
+
+		function parseCTDReportXMLCON(group) {
+			const xml = group.getXmlcon();
+
+			if (!group.summary) {
+				group.summary = {};
+			}
+
+			group.summary.sensors = xml.parsedMap;
+		}
+
+		function parseCTDReportBL(group) {
+			const bl = group.getBl();
+			if (bl) {
+				group.summary.bl = bl.getParsedBL();
+			}
+		}
+
+		// obj should initialized
+		function minMax(obj, name, value) {
+			obj[name][0] > value && (obj[name][0] = value);
+			obj[name][1] < value && (obj[name][1] = value);
+		}
+
+		function msToReadable(ms, fullFormat) {
+			const min = ~~(ms / 1000 / 60);
+
+			const d = Math.floor(min / (24 * 60));
+			const h = Math.floor((min % (24 * 60)) / 60);
+			const m = min % 60;
+
+			const r = [];
+
+			if (fullFormat) {
+
+				const rtf1 = new Intl.RelativeTimeFormat('en');
+
+				if (0 < d) {
+					const f = rtf1.formatToParts(d, 'day');
+					r.push(f[1].value + f[2].value);
+				}
+
+				if (0 < h) {
+					const f = rtf1.formatToParts(h, 'hour');
+					r.push(f[1].value + f[2].value);
+				}
+
+				if (0 < m) {
+					const f = rtf1.formatToParts(m, 'minute');
+					r.push(f[1].value + f[2].value);
+				}
+
+				return r.join(' ');
+			} else {
+				if (0 < d) {
+					r.push(`${d}d`);
+				}
+
+				if (0 < h) {
+					r.push(`${h}h`);
+				}
+
+				if (0 < m) {
+					r.push(`${m}m`);
+				}
+
+				return r.join(' ');
+			}
+		}
+
+		// -- parent message
+		function setMessageHandler() {
+			window.addEventListener('message', async (e) => {
+				if (e.data.rootHandler) {
+					const obj = e.data;
+
+					for(let i = 0; i < obj.files.length; i++) {
+						const f = obj.files[i];
+						const handle = await requestFileHandle(obj.rootHandler, f);
+						const file = await handle.getFile();
+						fileList.addFile(file);
+					}
+
+					document.getElementById('section-file').style.display = 'none';
+					postProcess();
+				}
+			});
+		}
+
+		async function requestFileHandle(handle, path) {
+			const sep = path.split('/');
+
+			let myHandle = handle;
+			// -- ignore first .
+			for (let i = 1; i < sep.length - 1; i++) {
+				const p = sep[i];
+				myHandle = await myHandle.getDirectoryHandle(p);
+			}
+
+			return myHandle.getFileHandle(sep.at(-1));
+		}
+
+		// -- should call everything loaded
+		function askOpener() {
+			if (window.opener) {
+				console.log('Ask opener');
+				window.opener.postMessage('ask');
+			}
+		}
+
+		setMessageHandler();
+		askOpener();
+
+		init();
+	</script>
+</body>
+
+</html>

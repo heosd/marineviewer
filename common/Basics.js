@@ -93,6 +93,7 @@ function ssStd(arr, name) {
 	}
 }
 
+// name can be array of string
 function ssExtent(arr, name) {
 	let min = Number.MAX_VALUE, max = Number.MIN_VALUE;
 
@@ -101,19 +102,34 @@ function ssExtent(arr, name) {
 			d < min && (min = d);
 			d > max && (max = d);
 		});
-	} else if(name && 'function' === typeof name) {
+	} else if (name && 'function' === typeof name) {
 		arr.forEach(d => {
 			const v = name(d);
 			v < min && (min = v);
 			v > max && (max = v);
 		});
-	} else if(name && 'string' === typeof name) {
+	} else if (name && 'string' === typeof name) {
 		arr.forEach(d => {
 			const v = d[name];
 			v < min && (min = v);
 			v > max && (max = v);
 		});
+	} else if (name && Array.isArray(name)) {
+		// -- array
+		const result = {};
+		name.forEach((n) => (result[n] = [Number.MAX_VALUE, Number.MIN_VALUE]));
+
+		arr.forEach((d) => {
+			name.forEach((n) => {
+				const v = d[n];
+				v < result[n][0] && (result[n][0] = v);
+				v > result[n][1] && (result[n][1] = v);
+			});
+		});
+
+		return result;
 	}
+
 
 	return [min, max];
 }
@@ -123,7 +139,7 @@ function ssBasic(arr, name) {
 	let min = Number.MAX_VALUE, max = Number.MIN_VALUE;
 	let sum = 0;
 
-	if(name) {
+	if (name) {
 		arr.forEach(d => {
 			const v = d[name];
 			sum = sum + Math.pow(v - mean, 2);
