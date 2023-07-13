@@ -27,7 +27,7 @@ class SelectMetaFiles extends HTMLSelectElement {
             // relativePath, name = 'marine_meta.csv'
             const opt = document.createElement('option');
             let path = v.relativePath.replace(/\/marine_meta.csv$/, '').replace(/^\./, '');
-            if('' === path) {
+            if ('' === path) {
                 path = '/';
             }
 
@@ -47,11 +47,62 @@ class SelectMetaFiles extends HTMLSelectElement {
 customElements.define('select-meta-files', SelectMetaFiles, { extends: 'select' });
 
 class MetaDetailItem extends HTMLElement {
+    static STYLE = `
+    .detail-item {
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: 1fr 3fr 1fr 1fr 2fr 1fr;
+        padding: 8px;
+        border-top: 1px solid #E5E6E7;
+        border-bottom: 1px solid #E5E6E7;
+
+        font-family: "Lucida console";
+    }
+
+    .detail-item:hover {
+        background-color: #E7E9EB;
+    }
+
+    #group_g1 {
+        text-overflow: ellipsis;
+        overflow-x: hidden;
+    }
+
+    #lat {
+        text-align: right;
+        padding-right: 1rem;
+    }
+
+    #lng {
+        text-align: right;
+        padding-right: 1rem;
+    }
+
+    #ts_utc {
+        text-align: center;
+    }
+
+    #bytes {
+        text-align: right;
+    }
+`;
+    static TEMPLATE_HTML = `
+<div class="detail-item">
+    <div id="type_g2"></div>
+    <div id="group_g1"></div>
+    <div id="lat"></div>
+    <div id="lng"></div>
+    <div id="ts_utc"></div>
+    <div id="bytes"></div>
+</div>
+    `;
     constructor(ds) {
         super();
+        this.execShadow();
         if (ds) {
             this.setDataSource(ds);
         }
+
     }
 
     setDataSource(ds) {
@@ -59,14 +110,62 @@ class MetaDetailItem extends HTMLElement {
         this.refreshChild();
     }
 
-    refreshChild() {
-        const ds = this.ds;
-        this.innerHTML = ''; // -- clear
-        const p = document.createElement('p');
-        p.style.cursor = 'pointer';
-        p.textContent = `${ds.type_g2}, ${ds.group_g1}, ${ds.lat}, ${ds.lng}, ${ds.ts_utc?.toLocaleString('af', { timeZone: 'UTC' })}`;
-        this.appendChild(p);
+    execShadow() {
+        const shadowRoot = this.attachShadow({ mode: 'open' });
+        const style = document.createElement('style');
+        const body = document.createElement('div');
+        style.textContent = MetaDetailItem.STYLE;
+        body.innerHTML = MetaDetailItem.TEMPLATE_HTML;
+
+        shadowRoot.appendChild(style);
+        shadowRoot.appendChild(body);
+        this.shadow = shadowRoot;
+
+        this.listElements = ['type_g2', 'group_g1', 'lat', 'lng', 'ts_utc', 'bytes'];
+
+        this.getElementsList(this.listElements);
     }
+
+    refreshChild() {
+        const ds = structuredClone(this.ds);
+
+        ds.lat = MetaDetailItem.FormatLocation(ds.lat);
+        ds.lng = MetaDetailItem.FormatLocation(ds.lng);
+        ds.bytes = MetaDetailItem.FormatBytes(ds.bytes);
+        ds.ts_utc = ds.ts_utc.toLocaleString('af', { timeZone: 'UTC' }).substring(0, 22);
+
+        this.listElements.forEach(k => this.shadow.getElementById(k).textContent = ds[k])
+    }
+
+    static FormatLocation(d) {
+        const n = Number(d);
+        if (isNaN(n)) {
+            return '-';
+        }
+
+        return n.toFixed(6);
+    }
+
+    static FormatBytes(b) {
+        if (b === 0) {
+            return "0.00 B";
+        }
+
+        let e = Math.floor(Math.log(b) / Math.log(1024));
+        return (b / Math.pow(1024, e)).toFixed(2) +
+            ' ' + ' KMGTP'.charAt(e) + 'B';
+    }
+
+    getElementsList(list) {
+        for (let i = 0; i < list.length; i++) {
+            const id = list[i];
+            const e = this.shadow.getElementById(id);
+            if (e) {
+                this['$' + id] = e;
+            }
+        }
+    }
+
 }
 customElements.define('meta-detail-item', MetaDetailItem);
 
@@ -153,7 +252,7 @@ const app = (() => {
             const hFile = await rootHandler.getFileHandle(META_CSV);
             hFile.relativePath = './' + hFile.name;
             files.push(hFile);
-        } catch(e) {
+        } catch (e) {
         };
         for await (const hDir of getDirHandlesRecursively(rootHandler, '.')) {
             try {
@@ -170,6 +269,11 @@ const app = (() => {
         document.getElementById('select-meta-files').setDataSource(files);
 
         parseMetaCSV();
+
+        // -- show delete button
+        if(0 < metaCSVs.length) {
+            document.getElementById('btnDeleteAllMetaCSV').style.display = 'inline-block';
+        }
 
         return files;
     }

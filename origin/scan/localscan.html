@@ -27,10 +27,10 @@
     <section class="root-selected">
         <article class="meta-container1">
             <div class="meta-button">
-                <button onclick="app.createMetaCSV()">create marine_meta.csv</button>
-                <button onclick="app.getMetaCSV()">MetaCSV</button>
-                <button onclick="app.parseMetaCSV()">Parse</button>
-                <button onclick="app.deleteAllMetaCSV()">delete all marine_meta.csv</button>
+                <button onclick="app.createMetaCSV()" class="button">Scan</button>
+                <!-- <button onclick="app.getMetaCSV()">MetaCSV</button> -->
+                <!-- <button onclick="app.parseMetaCSV()">Parse</button> -->
+                <button id="btnDeleteAllMetaCSV" onclick="app.deleteAllMetaCSV()" class="button" style="display: none">Remove meta</button>
                 <br>
                 <span id="statusMetaCSV"></span>
             </div>
