@@ -119,6 +119,13 @@
 				const meta2 = `NumSamples ${metaTrace[1]}, Interval ${metaTrace[2]}`;
 				document.getElementById('txtTrace1').textContent = meta1;
 				document.getElementById('txtTrace2').textContent = meta2;
+			} else if (ParserSEGY.SEGYText.IsMyType(item.type)) {
+				document.getElementById('articleDescribe').scrollTop = 0;
+				document.getElementById('articleHex').scrollTop = 0;
+
+				const parsed = ParserSEGY.SEGYText.ParseSectionDescribe(dataView, 0, context.isLE);
+				const area = document.getElementById('describeView');
+				area.setDataSource(parsed);
 			}
 
 			const hexView = document.getElementById('hexView');
@@ -179,7 +186,6 @@
 			window.dataSourceContext = segy;
 
 			document.getElementById('txtEndian').textContent = true === segy.isLE ? 'Little' : 'Big';
-
 
 			const sections = segy.sections;
 			listSections.setDataSource(sections);

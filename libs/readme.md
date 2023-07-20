@@ -6,7 +6,7 @@
 
 ## MarineParser
 - https://github.com/heosd/marineparser
-- 2023-07-04
+- 2023-07-20
 - [MIT License](./marineparser/LICENSE.txt)
 
 ## BabylonJS
